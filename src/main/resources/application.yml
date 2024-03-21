@@ -1,0 +1,30 @@
+######################
+# datasource setting #
+######################
+spring:
+  datasource:
+    driver-class-name: org.mariadb.jdbc.Driver
+    username: root
+    url: jdbc:mariadb://localhost:3333/sec
+    password: 123
+  ######################
+  # JPA setting #
+  ######################
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: 'true'
+    show-sql: 'true'
+
+
+############################
+##Setting Security Log Level
+############################
+logging:
+  level:
+    org:
+      springframework:
+        security:
+          web: trace
