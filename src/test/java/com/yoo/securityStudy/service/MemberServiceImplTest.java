@@ -7,6 +7,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.Set;
 
@@ -19,6 +20,9 @@ class MemberServiceImplTest {
 
     @Autowired
     private MemberService memberService;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     @Test
     @DisplayName("회원 저장 - password encoder 미적용")
@@ -40,4 +44,30 @@ class MemberServiceImplTest {
         assertThat(registerMember.getName()).isEqualTo(name);
         assertThat(registerMember.getRoles()).containsAll(rolesSet);
     }
+
+
+    @Test
+    @DisplayName("회원 저장 - password encoder")
+    void registerMember_PASSWORD_ENCODER() {
+        String yoo = "yoo2";
+        String password = "123";
+        Set<Roles> rolesSet = Set.of(Roles.ADMIN, Roles.USER);
+        String name = "흑곰";
+        MemberDTO memberDTO = MemberDTO.builder()
+                .id(yoo)
+                .name(name)
+                .password(password)
+                .roles(rolesSet)
+                .build();
+
+        MemberDTO registerMember = memberService.registerMember_passwordEncoder(memberDTO);
+        assertThat(registerMember.getId()).isEqualTo(yoo);
+        assertThat(registerMember.getName()).isEqualTo(name);
+        assertThat(registerMember.getRoles()).containsAll(rolesSet);
+
+        log.info("password 검증");
+        log.info(passwordEncoder.matches( password ,registerMember.getPassword()));
+        log.info("------");
+    }
+
 }

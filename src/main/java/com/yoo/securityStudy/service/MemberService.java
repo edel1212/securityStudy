@@ -6,6 +6,8 @@ import com.yoo.securityStudy.entity.Member;
 public interface MemberService {
     MemberDTO registerMember(MemberDTO memberDTO);
 
+    MemberDTO registerMember_passwordEncoder(MemberDTO memberDTO);
+
     default Member dtoToEntity(MemberDTO memberDTO){
         return Member.builder()
                 .id(memberDTO.getId())
