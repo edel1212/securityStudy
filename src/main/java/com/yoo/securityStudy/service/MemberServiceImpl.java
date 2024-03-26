@@ -53,10 +53,11 @@ public class MemberServiceImpl implements MemberService, UserDetailsService {
 
         // 2. 존재한다면 해당 데이터를 기준으로 User객체를 생성 반환
         //    🫵 중요 포인트는 해당 객체를 받아온 후 이후에 password 검증을 진행한다는 것이다
-        return User.builder()
-                .username(member.getId())
+        return MemberDTO.builder()
+                .id(member.getId())
                 .password(member.getPassword())
                 .authorities(this.authorities(member.getRoles()))
+                .roles(member.getRoles())
                 .build();
     }
 
