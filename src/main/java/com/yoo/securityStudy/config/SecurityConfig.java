@@ -32,6 +32,14 @@ public class SecurityConfig {
         // 👉  Default Login form 설정
         http.formLogin(Customizer.withDefaults());
 
+        // 👉 모든 접근 제한
+        http.authorizeHttpRequests( access ->
+                        access.requestMatchers("/**")
+                                .authenticated()
+                                .anyRequest().authenticated()
+                );
+
+
         return http.build();
     }
 
