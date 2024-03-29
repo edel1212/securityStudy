@@ -25,7 +25,8 @@ public class MemberDTO extends User {
     private String name;
     private Set<Roles> roles;
 
-    @Builder(builderClassName = "MemberDTOBuilder")
+    // TODO 생성자를 사용 하는 방법으로 수정이 필요
+    @Builder
     public MemberDTO(String id
             , String password
             , Collection<? extends GrantedAuthority> authorities
