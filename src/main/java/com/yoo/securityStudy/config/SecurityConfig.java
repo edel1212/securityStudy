@@ -1,9 +1,13 @@
 package com.yoo.securityStudy.config;
 
+import com.yoo.securityStudy.service.MemberService;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.context.annotation.Bean;
+import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -11,7 +15,11 @@ import org.springframework.stereotype.Component;
 
 @Component
 @Log4j2
+@RequiredArgsConstructor
 public class SecurityConfig {
+
+    private final UserDetailsService memberService;
+
 
     // 👉 Password를 인코딩 Bean 주입
     @Bean
@@ -39,6 +47,8 @@ public class SecurityConfig {
                                 .anyRequest().authenticated()
                 );
 
+        // 👉 UserDetailService 지정 - 내가 지정한 비즈니스 로직을 사용한다.
+       http.userDetailsService(memberService);
 
         return http.build();
     }

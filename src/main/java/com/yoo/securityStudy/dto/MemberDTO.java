@@ -25,7 +25,7 @@ public class MemberDTO extends User {
     private String name;
     private Set<Roles> roles;
 
-    @Builder
+    @Builder(builderClassName = "MemberDTOBuilder")
     public MemberDTO(String id
             , String password
             , Collection<? extends GrantedAuthority> authorities
