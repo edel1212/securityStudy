@@ -15,10 +15,9 @@ import org.springframework.stereotype.Component;
 
 @Component
 @Log4j2
-@RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final UserDetailsService memberService;
+    private UserDetailsService memberService;
 
 
     // 👉 Password를 인코딩 Bean 주입

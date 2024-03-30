@@ -25,18 +25,18 @@ public class MemberDTO extends User {
     private String name;
     private Set<Roles> roles;
 
-    // TODO 생성자를 사용 하는 방법으로 수정이 필요
-    @Builder
     public MemberDTO(String id
             , String password
+            , String name
             , Collection<? extends GrantedAuthority> authorities
             , Set<Roles> roles
-            , String name) {
+            ) {
         super(id, password, authorities);
         this.id = id;
         this.password = password;
         this.name = name;
         this.roles = roles;
     }
+
 
 }

@@ -53,19 +53,8 @@ public class MemberServiceImpl implements MemberService, UserDetailsService {
 
         // 2. 존재한다면 해당 데이터를 기준으로 User객체를 생성 반환
         //    🫵 중요 포인트는 해당 객체를 받아온 후 이후에 password 검증을 진행한다는 것이다
-        return MemberDTO.builder()
-                .id(member.getId())
-                .password(member.getPassword())
-                .authorities(this.authorities(member.getRoles()))
-                .roles(member.getRoles())
-                .build();
+        return this.entityToDto(member);
     }
 
-    // User객체의 형태에 맞는 객체 주입
-    private Collection<? extends GrantedAuthority> authorities(Set<Roles> roles){
-        return roles.stream()
-                //  "ROLE_" 접두사를 사용하는 이유는  Spring Security가 권한을 인식하고 처리할 때 해당 권한이 역할임을 명확하게 나타내기 위한 관례입니다.
-                .map(r -> new SimpleGrantedAuthority("ROLE_"+r.name()))
-                .collect(Collectors.toSet());
-    }
+
 }

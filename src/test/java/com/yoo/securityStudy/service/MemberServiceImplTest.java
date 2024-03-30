@@ -31,12 +31,9 @@ class MemberServiceImplTest {
         String password = "123";
         Set<Roles> rolesSet = Set.of(Roles.ADMIN, Roles.USER);
         String name = "흑곰";
-        MemberDTO memberDTO = MemberDTO.builder()
-                .id(yoo)
-                .name(name)
-                .password(password)
-                .roles(rolesSet)
-                .build();
+
+
+        MemberDTO memberDTO = new MemberDTO(yoo, password , name, memberService.authorities(rolesSet), rolesSet);
 
         MemberDTO registerMember = memberService.registerMember(memberDTO);
         assertThat(registerMember.getId()).isEqualTo(yoo);
@@ -49,16 +46,11 @@ class MemberServiceImplTest {
     @Test
     @DisplayName("회원 저장 - password encoder")
     void registerMember_PASSWORD_ENCODER() {
-        String yoo = "yoo2";
+        String yoo = "yoo4";
         String password = "123";
         Set<Roles> rolesSet = Set.of(Roles.ADMIN, Roles.USER);
         String name = "흑곰";
-        MemberDTO memberDTO = MemberDTO.builder()
-                .id(yoo)
-                .name(name)
-                .password(password)
-                .roles(rolesSet)
-                .build();
+        MemberDTO memberDTO = new MemberDTO(yoo, password , name , memberService.authorities(rolesSet) , rolesSet);
 
         MemberDTO registerMember = memberService.registerMember_passwordEncoder(memberDTO);
         assertThat(registerMember.getId()).isEqualTo(yoo);
