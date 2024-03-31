@@ -2,22 +2,15 @@ package com.yoo.securityStudy.service;
 
 import com.yoo.securityStudy.dto.MemberDTO;
 import com.yoo.securityStudy.entity.Member;
-import com.yoo.securityStudy.entity.enums.Roles;
 import com.yoo.securityStudy.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-
-import java.util.Collection;
-import java.util.Set;
-import java.util.stream.Collectors;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -26,6 +19,7 @@ public class MemberServiceImpl implements MemberService, UserDetailsService {
 
     private final MemberRepository memberRepository;
 
+    // ⭐️ SecurityConfig에서 Bean 생성 시 cycle 에러가 발생함 - Config용 class 따로 생성
     private final PasswordEncoder passwordEncoder;
 
     @Override
@@ -41,6 +35,7 @@ public class MemberServiceImpl implements MemberService, UserDetailsService {
         return this.entityToDto(member);
     }
 
+    @Transactional
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         log.info("-----------------");

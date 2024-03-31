@@ -30,7 +30,6 @@ public class Member {
     // ⭐️ Enum명 그대로 저장 - 미사용 시 숫자로 저장됨
     @Enumerated(EnumType.STRING)
     @Builder.Default
-
     @Column(nullable = false)
     private Set<Roles> roles = new HashSet<>();
 }
