@@ -1,5 +1,6 @@
 package com.yoo.securityStudy.config;
 
+import com.yoo.securityStudy.security.handler.CustomAccessDeniedHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.boot.autoconfigure.security.servlet.PathRequest;
@@ -10,6 +11,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -18,6 +20,11 @@ import org.springframework.stereotype.Component;
 public class SecurityConfig {
 
     private final UserDetailsService memberService;
+
+    @Bean
+    public AccessDeniedHandler accessDeniedHandler(){
+        return new CustomAccessDeniedHandler();
+    }
 
     /**
      * - SecurityFilterChain << 아무 옵션 없이 적용 시 모든 페이지 접근이 허용된다.
@@ -30,7 +37,7 @@ public class SecurityConfig {
         log.info("-------------------------");
 
         // 👉  Default Login form 설정
-        http.formLogin(Customizer.withDefaults());
+        //http.formLogin(Customizer.withDefaults());
 
         // 👉 모든 접근 제한
         http.authorizeHttpRequests( access ->
@@ -39,8 +46,14 @@ public class SecurityConfig {
                                 .anyRequest().authenticated()
                 );
 
-        // 👉 UserDetailService 지정 - 내가 지정한 비즈니스 로직을 사용한다.
+        // 👉 UserDetailService 지정 - 로그인 시 내가 지정한 비즈니스 로직을 사용한다.
        http.userDetailsService(memberService);
+
+        // Custom Exception Handling
+        http.exceptionHandling(handling ->
+                // ✨ Access Denied Handling
+                handling.accessDeniedHandler(accessDeniedHandler()
+                ));
 
         return http.build();
     }
