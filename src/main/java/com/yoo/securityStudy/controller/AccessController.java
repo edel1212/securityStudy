@@ -1,4 +1,4 @@
-package com.yoo.securityStudy;
+package com.yoo.securityStudy.controller;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -9,7 +9,7 @@ public class AccessController {
 
     @GetMapping("/all")
     public ResponseEntity allAccess(){
-        return ResponseEntity.ok("All Access!!");
+        return ResponseEntity.ok("All - Member Access!!");
     }
 
     @GetMapping("/user")
