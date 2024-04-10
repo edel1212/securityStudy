@@ -1,6 +1,7 @@
 package com.yoo.securityStudy.config;
 
 import com.yoo.securityStudy.security.handler.CustomAccessDeniedHandler;
+import com.yoo.securityStudy.security.handler.CustomAuthenticationEntryPoint;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.boot.autoconfigure.security.servlet.PathRequest;
@@ -21,10 +22,10 @@ public class SecurityConfig {
 
     private final UserDetailsService memberService;
 
-    @Bean
-    public AccessDeniedHandler accessDeniedHandler(){
-        return new CustomAccessDeniedHandler();
-    }
+    // AccessDenied Handler
+    private final CustomAccessDeniedHandler customAccessDeniedHandler;
+    // AuthenticationEntryPoint Handler
+    private final CustomAuthenticationEntryPoint customAuthenticationEntryPoint;
 
     /**
      * - SecurityFilterChain << 아무 옵션 없이 적용 시 모든 페이지 접근이 허용된다.
@@ -51,9 +52,14 @@ public class SecurityConfig {
 
         // Custom Exception Handling
         http.exceptionHandling(handling ->
-                // ✨ Access Denied Handling
-                handling.accessDeniedHandler(accessDeniedHandler()
-                ));
+
+               handling
+                    // ✨ Access Denied Handling
+                    .accessDeniedHandler(customAccessDeniedHandler)
+                     // ✨ AuthenticationEntryPoint
+                    .authenticationEntryPoint(customAuthenticationEntryPoint)
+        );
+
 
         return http.build();
     }
