@@ -28,3 +28,11 @@ logging:
       springframework:
         security:
           web: trace
+
+
+############################
+##Jwt Setting
+############################
+jwt:
+  expiration_time: 1 day
+  secret: VlwEyVBsYt9V7zq57TejMnVUyzblYcfPQye08f7MGVA9XkHa
