@@ -10,6 +10,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
@@ -51,6 +52,11 @@ public class SecurityConfig {
 
         // 👉  Default Login form 설정
         //http.formLogin(Customizer.withDefaults());
+
+        // 👉 기본 설정 로그인 form 사용 ❌
+        http.formLogin(form -> form.disable());
+        // 👉 Security HTTP Basic 인증 ❌ - 웹 상단 알림창으로 로그인이 뜨는 것 방지
+        http.httpBasic(AbstractHttpConfigurer::disable);
 
         // 👉 모든 접근 제한
         http.authorizeHttpRequests( access ->
