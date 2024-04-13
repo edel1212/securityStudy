@@ -14,6 +14,7 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.stereotype.Component;
+import org.springframework.web.cors.CorsConfigurationSource;
 
 @Component
 @RequiredArgsConstructor
@@ -36,6 +37,17 @@ public class SecurityConfig {
         log.info("-------------------------");
         log.info("Filter Chain");
         log.info("-------------------------");
+
+        // 👉 CSRF 사용 ❌
+        http.csrf(csrf -> csrf.disable());
+        // 👉 CORS 설정
+        http.cors(cors->{
+            /**
+             * 참고 : https://velog.io/@juhyeon1114/Spring-security%EC%97%90%EC%84%9C-CORS%EC%84%A4%EC%A0%95%ED%95%98%EA%B8%B0
+             *    - 설정 클래스를 만든 후 주입해주면 Cors 설정이 한번에 가능함
+             * */
+            // cors.configurationSource(CorsConfigurationSource)
+        });
 
         // 👉  Default Login form 설정
         //http.formLogin(Customizer.withDefaults());
