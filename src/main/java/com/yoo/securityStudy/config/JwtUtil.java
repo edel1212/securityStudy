@@ -86,9 +86,9 @@ public class JwtUtil {
         claims.put("memberId", memberDTO.getId());
         claims.put("role", memberDTO.getRoles());
 
+        // 👉 LocalDateTime과 차이점은 위치 지역대 시간대가 포함되어 있다는 것이다. ( 타임존 설정이 가능함 )
         ZonedDateTime now = ZonedDateTime.now();
         ZonedDateTime tokenValidity = now.plusSeconds(expireTime);
-
 
         return Jwts.builder()
                 .setClaims(claims)
