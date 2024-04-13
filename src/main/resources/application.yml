@@ -34,5 +34,5 @@ logging:
 ##Jwt Setting
 ############################
 jwt:
-  expiration_time: 1 day
+  expiration_time: 350124
   secret: VlwEyVBsYt9V7zq57TejMnVUyzblYcfPQye08f7MGVA9XkHa

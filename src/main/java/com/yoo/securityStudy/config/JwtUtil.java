@@ -1,6 +1,6 @@
 package com.yoo.securityStudy.config;
 
-import com.yoo.securityStudy.dto.MemberDTO;
+import com.yoo.securityStudy.dto.JwtLoginDTO;
 import io.jsonwebtoken.*;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Value;
@@ -13,9 +13,9 @@ import java.util.Date;
 @Log4j2
 @Component
 public class JwtUtil {
-    @Value("jwt.expiration_time")
+    @Value("${jwt.expiration_time}")
     private Long accessTokenExpTime;
-    @Value("jwt.secret")
+    @Value("${jwt.secret}")
     private String secret;
 
     /**
@@ -23,8 +23,8 @@ public class JwtUtil {
      * @param memberDTO
      * @return Access Token String
      */
-    public String createAccessToken(MemberDTO memberDTO) {
-        return createToken(memberDTO, accessTokenExpTime);
+    public String createAccessToken(JwtLoginDTO jwtLoginDTO) {
+        return createToken(jwtLoginDTO, accessTokenExpTime);
     }
 
     /**
@@ -81,10 +81,10 @@ public class JwtUtil {
      * @param expireTime
      * @return JWT String
      */
-    private String createToken(MemberDTO memberDTO, long expireTime) {
+    private String createToken(JwtLoginDTO jwtLoginDTO, long expireTime) {
         Claims claims = Jwts.claims();
-        claims.put("memberId", memberDTO.getId());
-        claims.put("role", memberDTO.getRoles());
+        claims.put("memberId", jwtLoginDTO.getMemberId());
+        claims.put("role", jwtLoginDTO.getRoles());
 
         // 👉 LocalDateTime과 차이점은 위치 지역대 시간대가 포함되어 있다는 것이다. ( 타임존 설정이 가능함 )
         ZonedDateTime now = ZonedDateTime.now();
