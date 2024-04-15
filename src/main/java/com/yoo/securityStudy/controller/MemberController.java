@@ -9,6 +9,7 @@ import com.yoo.securityStudy.service.MemberService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @RequestMapping(value = "/member", produces = MediaType.APPLICATION_JSON_VALUE)
 @RequiredArgsConstructor
@@ -30,7 +32,16 @@ public class MemberController {
     @PostMapping("/login")
     public ResponseEntity login(@RequestBody LoginDTO loginDTO){
         UserDetails userDetails = userDetailsService.loadUserByUsername(loginDTO.getId());
-        return ResponseEntity.ok().body(jwtUtil.createAccessToken(JwtLoginDTO.builder().memberId("zzz").roles(Set.of(Roles.ADMIN)).build()));
+        // Role 파싱
+        Set<Roles> rolesSet = userDetails.getAuthorities().stream()
+                .map(authority -> Roles.valueOf(authority.getAuthority().replace("ROLE_","")))
+                .collect(Collectors.toSet());
+        // 객체 생성
+        JwtLoginDTO jwtLoginDTO = JwtLoginDTO.builder()
+                .memberId(userDetails.getUsername())
+                .roles(rolesSet)
+                .build();
+        return ResponseEntity.ok().body(jwtUtil.createAccessToken(jwtLoginDTO));
     }
 
 }

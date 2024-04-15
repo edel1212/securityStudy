@@ -20,7 +20,7 @@ public class JwtUtil {
 
     /**
      * Access Token 생성
-     * @param memberDTO
+     * @param jwtLoginDTO
      * @return Access Token String
      */
     public String createAccessToken(JwtLoginDTO jwtLoginDTO) {
