@@ -1,6 +1,7 @@
 package com.yoo.securityStudy.config;
 
 import com.yoo.securityStudy.security.handler.CustomAccessDeniedHandler;
+import com.yoo.securityStudy.security.handler.CustomAuthFailureHandler;
 import com.yoo.securityStudy.security.handler.CustomAuthenticationEntryPoint;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
@@ -24,10 +25,12 @@ public class SecurityConfig {
 
     private final UserDetailsService memberService;
 
-    // AccessDenied Handler
+    // 권한 제어 핸들러
     private final CustomAccessDeniedHandler customAccessDeniedHandler;
-    // AuthenticationEntryPoint Handler
+    // 접근 제어 핸들러
     private final CustomAuthenticationEntryPoint customAuthenticationEntryPoint;
+    // 인증 제어 핸들러
+    private final CustomAuthFailureHandler customAuthFailureHandler;
 
     /**
      * - SecurityFilterChain << 아무 옵션 없이 적용 시 모든 페이지 접근이 허용된다.
@@ -54,7 +57,8 @@ public class SecurityConfig {
         //http.formLogin(Customizer.withDefaults());
 
         // 👉 기본 설정 로그인 form 사용 ❌
-        http.formLogin(form -> form.disable());
+        http.formLogin(login->login.loginProcessingUrl("/login")
+                .failureHandler(customAuthFailureHandler));
         // 👉 Security HTTP Basic 인증 ❌ - 웹 상단 알림창으로 로그인이 뜨는 것 방지
         http.httpBasic(AbstractHttpConfigurer::disable);
 
@@ -70,14 +74,12 @@ public class SecurityConfig {
 
         // Custom Exception Handling
         http.exceptionHandling(handling ->
-
                handling
                     // ✨ Access Denied Handling
                     .accessDeniedHandler(customAccessDeniedHandler)
                      // ✨ AuthenticationEntryPoint
                     .authenticationEntryPoint(customAuthenticationEntryPoint)
         );
-
 
         return http.build();
     }
