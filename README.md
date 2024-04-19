@@ -23,8 +23,7 @@ dependencies {
   - 생성 이후 부터는 모든 요청에 대한 접근이 **허용**으로 변경된다.
 - 함수형 인터페이스를 사용하여 옵션을 적용해준다.
   - 이전 `체이닝 -> 함수형`으로 변경되었다.
--  `SecurityFilterChain`를 구현한 메서드내의 매개변수인  HttpSecurity 객체에 옵션을 더하는 식으로 설정이 가능하다.	
-
+-  `SecurityFilterChain`를 구현한 메서드내의 매개변수인  HttpSecurity 객체에 옵션을 더하는 식으드
   ```java
   @Component
   @Log4j2
@@ -66,18 +65,6 @@ dependencies {
                                   .authenticated()
                                   .anyRequest().authenticated()
                   );
-
-          // 👉 UserDetailService 지정 - 로그인 시 내가 지정한 비즈니스 로직을 사용한다.
-        http.userDetailsService(memberService);
-
-          // Custom Exception Handling
-          http.exceptionHandling(handling ->
-                handling
-                      // ✨ Access Denied Handling
-                      .accessDeniedHandler(customAccessDeniedHandler)
-                      // ✨ AuthenticationEntryPoint
-                      .authenticationEntryPoint(customAuthenticationEntryPoint)
-          );
 
           return http.build();
       }
