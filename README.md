@@ -25,7 +25,7 @@ dependencies {
   - 이전 `체이닝 -> 함수형`으로 변경되었다.
 -  `SecurityFilterChain`를 구현한 메서드내의 매개변수인  HttpSecurity 객체에 옵션을 더하는 식으로 설정을 한다.
 -  `WebSecurityCustomizer`를 구현한 메서드내에서 Security 필터에서 제외할 요청을 지정 가능하다
-  - 정적파일을 사용하는 경우에는 꼭 해당 설정해주자.
+   - 정적파일을 사용하는 경우에는 꼭 해당 설정해주자.
 - 예시 코드 	
   ```java
   @Component
@@ -53,12 +53,11 @@ dependencies {
               // cors.configurationSource(CorsConfigurationSource)
           });
 
-          // 👉  Default Login form 설정
+          // 👉  Default Login form 설정 - 사용 할경우
           //http.formLogin(Customizer.withDefaults());
 
           // 👉 기본 설정 로그인 form 사용 ❌
-          http.formLogin(login->login.loginProcessingUrl("/login")
-                  .failureHandler(customAuthFailureHandler));
+          http.formLogin(login->login..disable());
           // 👉 Security HTTP Basic 인증 ❌ - 웹 상단 알림창으로 로그인이 뜨는 것 방지
           http.httpBasic(AbstractHttpConfigurer::disable);
 
