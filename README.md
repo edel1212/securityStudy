@@ -20,8 +20,10 @@ dependencies {
 - 지정 클래스는 Bean Scan 대상에 추가 해줘야한다.
   - `@Component` 어노테이션 사용
 - `SecurityFilterChain`를 구현하는 메서드를 생성한 후 Bean에 추가해준다.
-
   - 생성 이후 부터는 모든 요청에 대한 접근이 **허용**으로 변경된다.
+- 함수형 인터페이스를 사용하여 옵션을 적용해준다.
+  - 이전 `체이닝 -> 함수형`으로 변경되었다.
+-  `SecurityFilterChain`를 구현한 메서드내의 매개변수인  HttpSecurity 객체에 옵션을 더하는 식으로 설정이 가능하다.	
 
   ```java
   @Component
