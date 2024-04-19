@@ -23,7 +23,10 @@ dependencies {
   - 생성 이후 부터는 모든 요청에 대한 접근이 **허용**으로 변경된다.
 - 함수형 인터페이스를 사용하여 옵션을 적용해준다.
   - 이전 `체이닝 -> 함수형`으로 변경되었다.
--  `SecurityFilterChain`를 구현한 메서드내의 매개변수인  HttpSecurity 객체에 옵션을 더하는 식으드
+-  `SecurityFilterChain`를 구현한 메서드내의 매개변수인  HttpSecurity 객체에 옵션을 더하는 식으로 설정을 한다.
+-  `WebSecurityCustomizer`를 구현한 메서드내에서 Security 필터에서 제외할 요청을 지정 가능하다
+  - 정적파일을 사용하는 경우에는 꼭 해당 설정해주자.
+- 예시 코드 	
   ```java
   @Component
   @Log4j2
