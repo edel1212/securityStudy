@@ -20,9 +20,13 @@ dependencies {
 - 지정 클래스는 Bean Scan 대상에 추가 해줘야한다.
   - `@Component` 어노테이션 사용
 - `SecurityFilterChain`를 구현하는 메서드를 생성한 후 Bean에 추가해준다.
-
   - 생성 이후 부터는 모든 요청에 대한 접근이 **허용**으로 변경된다.
-
+- 함수형 인터페이스를 사용하여 옵션을 적용해준다.
+  - 이전 `체이닝 -> 함수형`으로 변경되었다.
+-  `SecurityFilterChain`를 구현한 메서드내의 매개변수인  HttpSecurity 객체에 옵션을 더하는 식으로 설정을 한다.
+-  `WebSecurityCustomizer`를 구현한 메서드내에서 Security 필터에서 제외할 요청을 지정 가능하다
+   - 정적파일을 사용하는 경우에는 꼭 해당 설정해주자.
+- 예시 코드 	
   ```java
   @Component
   @Log4j2
@@ -49,12 +53,11 @@ dependencies {
               // cors.configurationSource(CorsConfigurationSource)
           });
 
-          // 👉  Default Login form 설정
+          // 👉  Default Login form 설정 - 사용 할경우
           //http.formLogin(Customizer.withDefaults());
 
           // 👉 기본 설정 로그인 form 사용 ❌
-          http.formLogin(login->login.loginProcessingUrl("/login")
-                  .failureHandler(customAuthFailureHandler));
+          http.formLogin(login->login..disable());
           // 👉 Security HTTP Basic 인증 ❌ - 웹 상단 알림창으로 로그인이 뜨는 것 방지
           http.httpBasic(AbstractHttpConfigurer::disable);
 
@@ -64,18 +67,6 @@ dependencies {
                                   .authenticated()
                                   .anyRequest().authenticated()
                   );
-
-          // 👉 UserDetailService 지정 - 로그인 시 내가 지정한 비즈니스 로직을 사용한다.
-        http.userDetailsService(memberService);
-
-          // Custom Exception Handling
-          http.exceptionHandling(handling ->
-                handling
-                      // ✨ Access Denied Handling
-                      .accessDeniedHandler(customAccessDeniedHandler)
-                      // ✨ AuthenticationEntryPoint
-                      .authenticationEntryPoint(customAuthenticationEntryPoint)
-          );
 
           return http.build();
       }
