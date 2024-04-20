@@ -1,6 +1,7 @@
 package com.yoo.securityStudy.config;
 
 import com.yoo.securityStudy.dto.JwtLoginDTO;
+import com.yoo.securityStudy.security.dto.JwtToken;
 import io.jsonwebtoken.*;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,6 +18,19 @@ public class JwtUtil {
     private Long accessTokenExpTime;
     @Value("${jwt.secret}")
     private String secret;
+
+
+    //////////////////////////////////////
+    /**
+     * createAccessToken 이슈로 인해 재생성 중
+     * */
+    public JwtToken generateToken(){
+        return null;
+    }
+
+
+
+    /////////////////////////////////////
 
     /**
      * Access Token 생성

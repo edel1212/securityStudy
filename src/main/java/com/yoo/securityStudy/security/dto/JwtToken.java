@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class jwtToken {
+public class JwtToken {
     // Jwt 인증 타입 [ Bearer 사용 ]
     private String grantType;
     // 발급 토근
