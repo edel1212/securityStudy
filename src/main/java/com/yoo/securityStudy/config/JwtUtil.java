@@ -75,15 +75,6 @@ public class JwtUtil {
     /////////////////////////////////////
 
     /**
-     * Access Token 생성
-     * @param jwtLoginDTO
-     * @return Access Token String
-     */
-    public String createAccessToken(JwtLoginDTO jwtLoginDTO) {
-        return createToken(jwtLoginDTO, accessTokenExpTime);
-    }
-
-    /**
      * JWT 검증
      * - 각각 예외에 따라 ControllerAdvice를 사용해서 처리가 가능함
      * @param accessToken
@@ -120,38 +111,6 @@ public class JwtUtil {
         } catch (ExpiredJwtException e) {
             return e.getClaims();
         }// try - catch
-    }
-
-    /**
-     * Token에서 Member ID 추출
-     * @param accessToken
-     * @return Member ID
-     */
-    public String getUserId(String accessToken) {
-        return parseClaims(accessToken).get("memberId", String.class);
-    }
-
-    /**
-     * JWT 생성
-     * @param memberDTO
-     * @param expireTime
-     * @return JWT String
-     */
-    private String createToken(JwtLoginDTO jwtLoginDTO, long expireTime) {
-        Claims claims = Jwts.claims();
-        claims.put("memberId", jwtLoginDTO.getMemberId());
-        claims.put("role", jwtLoginDTO.getRoles());
-
-        // 👉 LocalDateTime과 차이점은 위치 지역대 시간대가 포함되어 있다는 것이다. ( 타임존 설정이 가능함 )
-        ZonedDateTime now = ZonedDateTime.now();
-        ZonedDateTime tokenValidity = now.plusSeconds(expireTime);
-
-        return Jwts.builder()
-                .setClaims(claims)
-                .setIssuedAt(Date.from(Instant.now()))
-                .setExpiration(Date.from(tokenValidity.toInstant()))
-                .signWith(SignatureAlgorithm.HS256, secret)
-                .compact();
     }
 
 }
