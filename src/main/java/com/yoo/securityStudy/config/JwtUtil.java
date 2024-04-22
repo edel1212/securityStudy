@@ -1,6 +1,5 @@
 package com.yoo.securityStudy.config;
 
-import com.yoo.securityStudy.dto.JwtLoginDTO;
 import com.yoo.securityStudy.security.dto.JwtToken;
 import io.jsonwebtoken.*;
 import lombok.extern.log4j.Log4j2;
@@ -30,6 +29,7 @@ public class JwtUtil {
      * - 👉 Authentication을 통해 로그인한 정보를 받아서 사용이 가능하다!!
      * */
     public JwtToken generateToken(Authentication authentication){
+
         // 로그인에 성공한 사용자의 권한을 가져온 후 문자열로 반환
         // ex) "ROLE_USER,ROLE_MANAGER,ROLE_ADMIN"
         String authorities = authentication.getAuthorities().stream()

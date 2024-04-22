@@ -41,6 +41,7 @@ public class MemberController {
         UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(loginDTO.getId()
                 , loginDTO.getPassword());
 
+        /** 실제 검증 후 반환하는  authentication에는 내가 커스텀한 UserDetail정보가 들어가 있음*/
         // 2. 실제 검증. authenticate() 메서드를 통해 요청된 Member 에 대한 검증 진행
         // authenticate 메서드가 실행될 때 CustomUserDetailsService 에서 만든 loadUserByUsername 메서드 실행
         Authentication authentication = authenticationManagerBuilder.getObject().authenticate(authenticationToken);
