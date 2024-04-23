@@ -188,6 +188,12 @@ dependencies {
     }    
     ```  
 
+- `AuthFailureHandler` 설정
+  - 해당 핸들러는 로그인 실패 시 핸들링 하는 핸들러이다.
+  - 다만 Loginform을 사용하는게 아닌 현재와 같은 Jwt Token을 발행하는 경우 해당 핸들러는 사용하는데 어려움이 있다.
+    - 이유) 해당 핸들러의 주입이 `formLogin()`함수 설정에서만 들어감
+      - 
+
 
 ## TODO List
 

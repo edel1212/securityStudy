@@ -51,7 +51,7 @@ public class SecurityConfig {
         });
 
         // 👉  Default Login form 설정
-        //http.formLogin(Customizer.withDefaults());
+        http.formLogin(Customizer.withDefaults().);
 
         // 👉 기본 설정 로그인 form 사용 ❌
         http.formLogin(login->login.loginProcessingUrl("/login")
