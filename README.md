@@ -94,10 +94,8 @@ dependencies {
     - 인증 실패 처리: 사용자가 인증되지 않았거나, 인증 정보가 잘못되었을 때 호출됩니다.
     - 리디렉션: 웹 애플리케이션에서는 인증되지 않은 사용자를 로그인 페이지로 리디렉션하는 것이 일반적입니다. AuthenticationEntryPoint를 사용하여 이러한 리디렉션을 설정할 수 있습니다
     - 에러 메시지 반환: 인증이 실패하면 사용자에게 에러 메시지나 HTTP 상태 코드를 반환하여 문제의 원인을 알릴 수 있습니다.
-- `AccessDeniedHandler` 설정
-  - 접근 권한 실패 시 이동 시킨다.
 - 사용 방법
-  - `AuthenticationEntryPoint`를 구현한 클래스 제작 - EntryPoint 핸들러
+  - `AuthenticationEntryPoint`를 구현한 클래스 제작
   - Bean Scan 대상에 올려주기 위해 `@Component`를 추가해주자
     ```java
     @Log4j2
@@ -122,8 +120,31 @@ dependencies {
       }
     }
     ```
-    
-
+- `AccessDeniedHandler` 설정
+  - 인증에 실패했을 경우 처리를 담당한다.
+- 사용 방법
+  - `AccessDeniedHandler`를 구현한 클래스 제작
+  - Bean Scan 대상에 올려주기 위해 `@Component`를 추가해주자
+    ```java
+    @Log4j2
+    @Component
+    public class CustomAccessDeniedHandler implements AccessDeniedHandler {
+      @Override
+      public void handle(HttpServletRequest request, HttpServletResponse response, AccessDeniedException accessDeniedException) throws IOException, ServletException {
+        log.info("- Custom Access Denied Handler 접근 -");
+        var objectMapper = new ObjectMapper();
+        int scUnauthorized = HttpServletResponse.SC_UNAUTHORIZED;
+        response.setStatus(scUnauthorized);
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .code(scUnauthorized)
+                .message("접근 권한이 없습니다.")
+                .build();
+        response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
+      }
+    }
+    ```    
 - `SecurityConfig` 설정 
   - 의존성 주입 후 `exceptionHandling()`에 등록
     ```java
