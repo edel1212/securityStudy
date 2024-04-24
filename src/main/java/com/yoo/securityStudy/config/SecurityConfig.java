@@ -27,7 +27,7 @@ public class SecurityConfig {
     private final CustomAccessDeniedHandler customAccessDeniedHandler;
     // 접근 제어 핸들러
     private final CustomAuthenticationEntryPoint customAuthenticationEntryPoint;
-    // 인증 제어 핸들러
+    // 인증 실패 제어 핸들러
     private final CustomAuthFailureHandler customAuthFailureHandler;
 
     /**
@@ -51,13 +51,10 @@ public class SecurityConfig {
             // cors.configurationSource(CorsConfigurationSource)
         });
 
-        // 👉  Default Login form 설정
+        // 👉 로그인을 사용할 loginProcessingUrl을 설정해준다.
         http.formLogin(login->login.loginProcessingUrl("/login")
                 .failureHandler(customAuthFailureHandler));
 
-        // 👉 기본 설정 로그인 form 사용 ❌
-        http.formLogin(login->login.loginProcessingUrl("/login")
-                .failureHandler(customAuthFailureHandler));
         // 👉 Security HTTP Basic 인증 ❌ - 웹 상단 알림창으로 로그인이 뜨는 것 방지
         http.httpBasic(AbstractHttpConfigurer::disable);
 

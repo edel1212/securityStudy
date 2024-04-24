@@ -57,7 +57,7 @@ dependencies {
           //http.formLogin(Customizer.withDefaults());
 
           // 👉 기본 설정 로그인 form 사용 ❌
-          http.formLogin(login->login..disable());
+          http.formLogin(login->login.disable());
           // 👉 Security HTTP Basic 인증 ❌ - 웹 상단 알림창으로 로그인이 뜨는 것 방지
           http.httpBasic(AbstractHttpConfigurer::disable);
 
@@ -110,8 +110,6 @@ dependencies {
             response.setStatus(scUnauthorized);
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-            // TODO 
-            // ex) if (authException instanceof BadCredentialsException)  << 비밀번호가 틀릴 경우
             ErrorResponse errorResponse = ErrorResponse.builder()
                     .code(scUnauthorized)
                     .message("예외 메세지 등록")
@@ -190,9 +188,8 @@ dependencies {
 
 - `AuthFailureHandler` 설정
   - 해당 핸들러는 로그인 실패 시 핸들링 하는 핸들러이다.
-  - 다만 Loginform을 사용하는게 아닌 현재와 같은 Jwt Token을 발행하는 경우 해당 핸들러는 사용하는데 어려움이 있다.
-    - 이유) 해당 핸들러의 주입이 `formLogin()`함수 설정에서만 들어감
-      - `http.formLogin(login->login.loginProcessingUrl("/login").failureHandler(customAuthFailureHandler));`
+  - 사용하기 위해서는 로그인 form 설정을 해줘야한다.
+    - 단 현재 예제에서는 form 을 사용하지 않으니 `loginProcessingUrl()`설정을 해준 후 지정해준다.
   - 사용 방법
     - `SimpleUrlAuthenticationFailureHandler`를 상속한 클래스 제작
     - Bean Scan 대상에 올려주기 위해 `@Component`를 추가해주자
@@ -222,7 +219,31 @@ dependencies {
          }
        }
        ```   
-
+- `SecurityConfig` 설정
+  - 의존성 주입 후 `exceptionHandling()`에 등록
+    ```java
+    @Component
+    @RequiredArgsConstructor
+    @Log4j2
+    public class SecurityConfig {
+    
+      // 인증 실패 제어 핸들러
+      private final CustomAuthFailureHandler customAuthFailureHandler;
+    
+      @Bean
+      public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
+    
+        // 👉 로그인을 사용할 loginProcessingUrl을 설정해준다.
+        http.formLogin(login->login.loginProcessingUrl("/login")
+                .failureHandler(customAuthFailureHandler));      
+    
+        return http.build();
+      }
+    
+    
+    
+    }    
+    ```  
 
 ## TODO List
 

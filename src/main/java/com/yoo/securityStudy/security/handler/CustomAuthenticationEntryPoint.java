@@ -21,6 +21,12 @@ public class CustomAuthenticationEntryPoint implements AuthenticationEntryPoint 
     @Override
     public void commence(HttpServletRequest request, HttpServletResponse response, AuthenticationException authException) throws IOException, ServletException {
         log.info("- Custom Authentication Entry PointHandler 접근 -");
+        log.info("----------------------------");
+        log.info(authException);
+        // - 그냥 접근
+        // org.springframework.security.authentication.InsufficientAuthenticationException: Full authentication is required to access this resource
+        // - 비밀번호 틀렸을 경우
+        log.info("----------------------------");
         var objectMapper = new ObjectMapper();
         int scUnauthorized = HttpServletResponse.SC_UNAUTHORIZED;
         response.setStatus(scUnauthorized);
