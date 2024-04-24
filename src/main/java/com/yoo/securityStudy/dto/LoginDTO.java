@@ -9,5 +9,4 @@ import lombok.*;
 public class LoginDTO {
     private String id;
     private String password;
-
 }

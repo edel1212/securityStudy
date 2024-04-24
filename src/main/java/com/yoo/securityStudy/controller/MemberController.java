@@ -29,8 +29,6 @@ import java.util.stream.Collectors;
 @RestController
 public class MemberController {
 
-    private final UserDetailsService userDetailsService;
-    private final MemberService memberService;
     private final AuthenticationManagerBuilder authenticationManagerBuilder;
     private final JwtUtil jwtUtil;
 

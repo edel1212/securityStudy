@@ -21,8 +21,6 @@ public class JwtUtil {
     @Value("${jwt.secret}")
     private String secret;
 
-
-    //////////////////////////////////////
     /**
      * createAccessToken 이슈로 인해 재생성 중
      *
@@ -69,10 +67,6 @@ public class JwtUtil {
                 .refreshToken(refreshToken)
                 .build();
     }
-
-
-
-    /////////////////////////////////////
 
     /**
      * JWT 검증
