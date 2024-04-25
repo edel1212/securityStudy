@@ -4,6 +4,7 @@ import com.yoo.securityStudy.config.JwtUtil;
 import com.yoo.securityStudy.dto.LoginDTO;
 import com.yoo.securityStudy.security.dto.JwtToken;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.log4j.Log4j2;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping(value = "/member", produces = MediaType.APPLICATION_JSON_VALUE)
 @RequiredArgsConstructor
 @RestController
+@Log4j2
 public class MemberController {
 
     private final AuthenticationManagerBuilder authenticationManagerBuilder;
@@ -24,6 +26,9 @@ public class MemberController {
 
     @PostMapping("/login")
     public ResponseEntity login(@RequestBody LoginDTO loginDTO){
+        log.info("------------------");
+        log.info("!!!");
+        log.info("------------------");
         // 1. username + password 를 기반으로 Authentication 객체 생성
         // 이때 authentication 은 인증 여부를 확인하는 authenticated 값이 false
         UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(loginDTO.getId()

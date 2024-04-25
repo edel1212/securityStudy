@@ -1,6 +1,7 @@
 package com.yoo.securityStudy.service;
 
-import com.yoo.securityStudy.dto.MemberDTO;
+import com.yoo.securityStudy.dto.member.req.SignUpReq;
+import com.yoo.securityStudy.dto.member.res.SignUpRes;
 import com.yoo.securityStudy.entity.Member;
 import com.yoo.securityStudy.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
@@ -23,16 +24,10 @@ public class MemberServiceImpl implements MemberService, UserDetailsService {
     private final PasswordEncoder passwordEncoder;
 
     @Override
-    public MemberDTO registerMember(MemberDTO memberDTO) {
-        Member member = memberRepository.save(this.dtoToEntity(memberDTO));
-        return this.entityToDto(member);
-    }
-
-    @Override
-    public MemberDTO registerMember_passwordEncoder(MemberDTO memberDTO) {
-        memberDTO.setPassword(passwordEncoder.encode(memberDTO.getPassword()));
-        Member member = memberRepository.save(this.dtoToEntity(memberDTO));
-        return this.entityToDto(member);
+    public SignUpRes registerMember(SignUpReq signUpReq) {
+        signUpReq.setPassword(passwordEncoder.encode(signUpReq.getPassword()));
+        Member member = memberRepository.save(this.dtoToEntity(signUpReq));
+        return this.entityToSignUpRes(member);
     }
 
     @Transactional
@@ -48,7 +43,7 @@ public class MemberServiceImpl implements MemberService, UserDetailsService {
 
         // 2. 존재한다면 해당 데이터를 기준으로 User객체를 생성 반환
         //    🫵 중요 포인트는 해당 객체를 받아온 후 이후에 password 검증을 진행한다는 것이다
-        return this.entityToDto(member);
+        return this.entityToUserDto(member);
     }
 
 
