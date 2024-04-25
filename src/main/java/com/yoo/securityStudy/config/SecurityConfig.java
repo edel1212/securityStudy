@@ -51,9 +51,12 @@ public class SecurityConfig {
             // cors.configurationSource(CorsConfigurationSource)
         });
 
+        http.formLogin(Customizer.withDefaults());
         // 👉 로그인을 사용할 loginProcessingUrl을 설정해준다.
-        http.formLogin(login->login.loginProcessingUrl("/login")
-                .failureHandler(customAuthFailureHandler));
+        http.formLogin(login ->{
+            login.failureHandler(customAuthFailureHandler);
+        } );
+
 
         // 👉 Security HTTP Basic 인증 ❌ - 웹 상단 알림창으로 로그인이 뜨는 것 방지
         http.httpBasic(AbstractHttpConfigurer::disable);
