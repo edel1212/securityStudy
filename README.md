@@ -220,7 +220,7 @@ dependencies {
        }
        ```   
 - `SecurityConfig` 설정
-  - 의존성 주입 후 `exceptionHandling()`에 등록
+  - 의존성 주입 후 `formLogin()`내 함수 등록 `loginProcessingUrl("url"),failureHandler(customAuthFailureHandler)`
     ```java
     @Component
     @RequiredArgsConstructor
@@ -239,8 +239,6 @@ dependencies {
     
         return http.build();
       }
-    
-    
     
     }    
     ```  
