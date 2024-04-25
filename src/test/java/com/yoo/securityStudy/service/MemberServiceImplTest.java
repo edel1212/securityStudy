@@ -1,6 +1,7 @@
 package com.yoo.securityStudy.service;
 
-import com.yoo.securityStudy.dto.MemberDTO;
+import com.yoo.securityStudy.dto.member.req.SignUpReq;
+import com.yoo.securityStudy.dto.member.res.SignUpRes;
 import com.yoo.securityStudy.entity.enums.Roles;
 import lombok.extern.log4j.Log4j2;
 import org.junit.jupiter.api.DisplayName;
@@ -12,7 +13,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
 @Log4j2
@@ -25,40 +25,25 @@ class MemberServiceImplTest {
     private PasswordEncoder passwordEncoder;
 
     @Test
-    @DisplayName("회원 저장 - password encoder 미적용")
-    void registerMember_NO_USEED_PASSWORD_ENCODER() {
-        String yoo = "yoo";
-        String password = "123";
-        Set<Roles> rolesSet = Set.of(Roles.ADMIN, Roles.USER);
-        String name = "흑곰";
-
-
-        MemberDTO memberDTO = new MemberDTO(yoo, password , name, memberService.authorities(rolesSet), rolesSet);
-
-        MemberDTO registerMember = memberService.registerMember(memberDTO);
-        assertThat(registerMember.getId()).isEqualTo(yoo);
-        assertThat(registerMember.getPassword()).isEqualTo(password);
-        assertThat(registerMember.getName()).isEqualTo(name);
-        assertThat(registerMember.getRoles()).containsAll(rolesSet);
-    }
-
-
-    @Test
-    @DisplayName("회원 저장 - password encoder")
+    @DisplayName("회원 저장 - usding password encoder")
     void registerMember_PASSWORD_ENCODER() {
-        String yoo = "yoo4";
+        String id = "yoo40";
         String password = "123";
         Set<Roles> rolesSet = Set.of(Roles.ADMIN, Roles.USER);
         String name = "흑곰";
-        MemberDTO memberDTO = new MemberDTO(yoo, password , name , memberService.authorities(rolesSet) , rolesSet);
-
-        MemberDTO registerMember = memberService.registerMember_passwordEncoder(memberDTO);
-        assertThat(registerMember.getId()).isEqualTo(yoo);
-        assertThat(registerMember.getName()).isEqualTo(name);
-        assertThat(registerMember.getRoles()).containsAll(rolesSet);
+        SignUpReq signUpReq = SignUpReq.builder()
+                .id(id)
+                .name(name)
+                .password(password)
+                .roles(rolesSet)
+                .build();
+        SignUpRes signUpRes = memberService.registerMember(signUpReq);
+        assertThat(signUpRes.getId()).isEqualTo(id);
+        assertThat(signUpRes.getName()).isEqualTo(name);
+        assertThat(signUpRes.getRoles()).containsAll(rolesSet);
 
         log.info("password 검증");
-        log.info(passwordEncoder.matches( password ,registerMember.getPassword()));
+        log.info(passwordEncoder.matches( password ,signUpRes.getPassword()));
         log.info("------");
     }
 
