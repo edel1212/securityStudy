@@ -34,7 +34,7 @@ public class MemberServiceImpl implements MemberService, UserDetailsService {
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         log.info("-----------------");
-        log.info("로그인 접근");
+        log.info("Service 접근 - loadUserByUsername");
         log.info("-----------------");
 
         // 1. userName(아이디)를 기준으로 데이터 존재 확인

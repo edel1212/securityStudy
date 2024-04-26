@@ -27,7 +27,7 @@ public class MemberController {
     @PostMapping("/login")
     public ResponseEntity login(@RequestBody LoginDTO loginDTO){
         log.info("------------------");
-        log.info("!!!");
+        log.info("Login Controller 접근");
         log.info("------------------");
         // 1. username + password 를 기반으로 Authentication 객체 생성
         // 이때 authentication 은 인증 여부를 확인하는 authenticated 값이 false

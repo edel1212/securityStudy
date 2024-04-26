@@ -8,6 +8,7 @@ import lombok.extern.log4j.Log4j2;
 import org.springframework.boot.autoconfigure.security.servlet.PathRequest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -52,12 +53,6 @@ public class SecurityConfig {
         // 세션 관련 설정  -  "SessionCreationPolicy.STATELESS" 스프링시큐리티가 생성하지도않고 기존것을 사용하지도 않음
         http.sessionManagement(session-> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
-        // 👉 로그인을 사용할 loginProcessingUrl을 설정해준다.
-        http.formLogin(login ->{
-                    login.loginProcessingUrl("/member/login");
-                    login.failureHandler(customAuthFailureHandler);
-                });
-
         // 👉 모든 접근 제한
         http.authorizeHttpRequests( access ->{
             // 어떠한 요청에도 검사 시작
@@ -86,6 +81,8 @@ public class SecurityConfig {
     @Bean
     public WebSecurityCustomizer webSecurityCustomizer(){
         return web -> web.ignoring()
+                // 로그인 접근은 누구나 허용
+                .requestMatchers(HttpMethod.POST,"/member/login")
                 // Spring Boot의 resources/static 경로의 정적 파일들 접근 허용
                 .requestMatchers(PathRequest.toStaticResources().atCommonLocations());
     }
