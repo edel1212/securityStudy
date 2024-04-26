@@ -215,6 +215,8 @@ dependencies {
                    .code(HttpServletResponse.SC_UNAUTHORIZED)
                    .message(errorMessage)
                    .build();
+           // 응답의 문자 인코딩을 UTF-8로 설정
+           response.setCharacterEncoding(StandardCharsets.UTF_8.name());
            response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
          }
        }

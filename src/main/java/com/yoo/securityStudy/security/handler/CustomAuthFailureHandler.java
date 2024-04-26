@@ -14,6 +14,7 @@ import org.springframework.security.web.authentication.SimpleUrlAuthenticationFa
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 @Log4j2
 @Component
@@ -31,11 +32,13 @@ public class CustomAuthFailureHandler implements AuthenticationFailureHandler {
             errorMessage = "존재하지 않는 계정입니다.";
         } else {
             errorMessage = "알 수없는 오류입니다.";
-        }
+        } // if - else
         ErrorResponse errorResponse = ErrorResponse.builder()
                 .code(HttpServletResponse.SC_UNAUTHORIZED)
                 .message(errorMessage)
                 .build();
+        // 응답의 문자 인코딩을 UTF-8로 설정
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
     }
 }
