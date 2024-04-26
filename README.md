@@ -191,7 +191,10 @@ dependencies {
   - 사용하기 위해서는 로그인 form 설정을 해줘야한다.
     - 단 현재 예제에서는 form 을 사용하지 않으니 `loginProcessingUrl()`설정을 해준 후 지정해준다.
   - 사용 방법
-    - `SimpleUrlAuthenticationFailureHandler`를 상속한 클래스 제작
+    - `SimpleUrlAuthenticationFailureHandler`를 상속한(`extends`) 클래스 제작 또는 `AuthenticationFailureHandler`를 구현한(`implements`) 클래스를 제작
+      - `SimpleUrlAuthenticationFailureHandler`를 사용하는 이유는?
+        - `AuthenticationFailureHandler`를 구한현 클래스이므로 같은 기능을 작동한다.
+        - SimpleUrl을 사용할 경우 `setDefaultFailureUrl()`를 사용하여 이동할 URL을 지정 가능하다.
     - Bean Scan 대상에 올려주기 위해 `@Component`를 추가해주자
        ```java
        @Log4j2
