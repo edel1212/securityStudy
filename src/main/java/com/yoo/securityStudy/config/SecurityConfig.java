@@ -14,7 +14,6 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.stereotype.Component;
 
 @Configuration
 @RequiredArgsConstructor
@@ -54,18 +53,16 @@ public class SecurityConfig {
         http.sessionManagement(session-> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
         // 👉 로그인을 사용할 loginProcessingUrl을 설정해준다.
-        http.formLogin(login -> {
+        http.formLogin(login ->{
                     login.loginProcessingUrl("/member/login");
                     login.failureHandler(customAuthFailureHandler);
                 });
 
-
         // 👉 모든 접근 제한
-        http.authorizeHttpRequests( access ->
-                        access.requestMatchers("/**")
-                                .authenticated()
-                                .anyRequest().authenticated()
-                );
+        http.authorizeHttpRequests( access ->{
+            // 어떠한 요청에도 검사 시작
+            access.anyRequest().authenticated();
+        });
 
         // 👉 UserDetailService 지정 - 로그인 시 내가 지정한 비즈니스 로직을 사용한다.
        http.userDetailsService(memberService);
