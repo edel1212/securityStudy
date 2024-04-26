@@ -221,6 +221,12 @@ dependencies {
        ```   
 - `SecurityConfig` 설정
   - 의존성 주입 후 `formLogin()`내 함수 등록 `loginProcessingUrl("url"),failureHandler(customAuthFailureHandler)`
+  - ℹ️ 중요 확인 사항 [ 삽질 이틀함 ]
+    - `ignoring()`에 LoginProcessingUrl을 등록하면 안된다. 
+      - Spring Security의 필터에서 제외 되기에 FailureHandler를 등록해도 제외된다.
+      - 사용 했던 이유는 로그인 페이지는 접근이 무조건 가능해야한다 생각함
+        - 하지만 `formLogin()`에서 `loginProcessingUrl()`를 지정하면 누구나 접근이 가능 했음..!
+  - 
     ```java
     @Component
     @RequiredArgsConstructor
@@ -234,12 +240,27 @@ dependencies {
       public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
     
         // 👉 로그인을 사용할 loginProcessingUrl을 설정해준다.
-        http.formLogin(login->login.loginProcessingUrl("/login")
+        http.formLogin(login->login.loginProcessingUrl("/member/login")
                 .failureHandler(customAuthFailureHandler));      
     
         return http.build();
       }
     
+      /**
+       * Security - Custom Bean 등록
+       * */
+      @Bean
+      public WebSecurityCustomizer webSecurityCustomizer(){
+          return web -> web.ignoring()
+                  /*********************************************/
+                  /** 아래 주석 내용떄문에 삽질함 ... */
+                  /*********************************************/
+                  // Login 접근 허용
+                  //.requestMatchers(HttpMethod.POST,"/member/login")
+        
+                  // Spring Boot의 resources/static 경로의 정적 파일들 접근 허용
+                  .requestMatchers(PathRequest.toStaticResources().atCommonLocations());
+      }
     }    
     ```  
 
