@@ -39,34 +39,32 @@ dependencies {
       public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
 
           log.info("-------------------------");
-          log.info("Filter Chain");
+          log.info(" 1) Security Filter Chain");
           log.info("-------------------------");
-
+          
+          /*************************************************/
+          /** Default Setting **/
+          /*************************************************/
           // 👉 CSRF 사용 ❌
           http.csrf(csrf -> csrf.disable());
           // 👉 CORS 설정
           http.cors(cors->{
               /**
-              * 참고 : https://velog.io/@juhyeon1114/Spring-security%EC%97%90%EC%84%9C-CORS%EC%84%A4%EC%A0%95%ED%95%98%EA%B8%B0
-              *    - 설정 클래스를 만든 후 주입해주면 Cors 설정이 한번에 가능함
-              * */
+               * 참고 : https://velog.io/@juhyeon1114/Spring-security%EC%97%90%EC%84%9C-CORS%EC%84%A4%EC%A0%95%ED%95%98%EA%B8%B0
+               *    - 설정 클래스를 만든 후 주입해주면 Cors 설정이 한번에 가능함
+               * */
               // cors.configurationSource(CorsConfigurationSource)
           });
-
-          // 👉  Default Login form 설정 - 사용 할경우
-          //http.formLogin(Customizer.withDefaults());
-
-          // 👉 기본 설정 로그인 form 사용 ❌
-          http.formLogin(login->login.disable());
           // 👉 Security HTTP Basic 인증 ❌ - 웹 상단 알림창으로 로그인이 뜨는 것 방지
           http.httpBasic(AbstractHttpConfigurer::disable);
-
+          // 👉 세션 관련 설정  -  "SessionCreationPolicy.STATELESS" 스프링시큐리티가 생성하지도않고 기존것을 사용하지도 않음
+          http.sessionManagement(session-> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+          
           // 👉 모든 접근 제한
-          http.authorizeHttpRequests( access ->
-                          access.requestMatchers("/**")
-                                  .authenticated()
-                                  .anyRequest().authenticated()
-                  );
+          http.authorizeHttpRequests( access ->{
+              // 어떠한 요청에도 검사 시작
+              access.anyRequest().authenticated();
+          });
 
           return http.build();
       }
@@ -187,9 +185,8 @@ dependencies {
     ```  
 
 - `AuthFailureHandler` 설정
-  - 해당 핸들러는 로그인 실패 시 핸들링 하는 핸들러이다.
-  - 사용하기 위해서는 로그인 form 설정을 해줘야한다.
-    - 단 현재 예제에서는 form 을 사용하지 않으니 `loginProcessingUrl()`설정을 해준 후 지정해준다.
+  - 해당 핸들러는 로그인 실패 시 핸들링 하는 핸들러이다. - ℹ️ 단 ! ***jwt 를사용할 경우 사용이 불가능하다.***
+  - 내부 Form 설정을 사용할 경우만 사용이 가능하다
   - 사용 방법
     - `SimpleUrlAuthenticationFailureHandler`를 상속한(`extends`) 클래스 제작 또는 `AuthenticationFailureHandler`를 구현한(`implements`) 클래스를 제작
       - `SimpleUrlAuthenticationFailureHandler`를 사용하는 이유는?
@@ -269,6 +266,12 @@ dependencies {
     }    
     ```  
 
+### `AuthFailureHandler`를 사용하지 않고 계정 및 비밀번호 예외 처리 방법
+- 방법은 크게 2가지가 있다.
+  - `AbstractAuthenticationProcessingFilter`를 상속한 클래스를 만든 후 Filter 순서를 바꾼다.
+  - 
+
+
 ### UserDetailService 설정
 - **DB를** 통해 회원을 관리하기 위해서는 꼭 필요한 설정이다.
 - `UserDetailsService`를 구현한 구현체 클래스가 필요하다.
@@ -276,46 +279,46 @@ dependencies {
     - `UserDetails`또한 Interface이며, 해당 Interface를 구현한 User를 반환하거나 상속한 Class를 반환해줘야한다.
       - `User`를 반환해도 괜찮지만 아이디, 패스워드, 권한 밖에 없으므로  상속을 통해 다양한 데이터를 객체로 
        담아 사용하기 위해서는 상속을 통해 사용해주자.
-- Table - Entity
+- Entity
   - 권한의 경우 Enum을 통해 Table을 생성한다.
     - `@ElementCollection(fetch = FetchType.LAZY)` 어노테이션을 통해 해당 테이블은 `회원ID, 권한`이 PK로 설정된다.
     -  `@Enumerated(EnumType.STRING)`를 통해 Enum이 숫자가 아닌 문자형태로 지정한 권한이 저장된다.
-  - Class
-    - 권한 Roles
-      ```java
-      public enum Roles {
-        USER ,
-        MANAGER ,
-        ADMIN ,
-      }
-      ```
-    - 회원 Member
-      ```java
-      @Entity
-      @AllArgsConstructor
-      @NoArgsConstructor
-      @Getter
-      @Builder
-      public class Member {
-        @Id
-        private String id;
+  - ⭐️ 권한 Roles
+    ```java
+    public enum Roles {
+      USER ,
+      MANAGER ,
+      ADMIN ,
+    }
+    ```
+  - ⭐️ 회원 Member
+    ```java
+    @Entity
+    @AllArgsConstructor
+    @NoArgsConstructor
+    @Getter
+    @Builder
+    public class Member {
+      @Id
+      private String id;
       
-        @Column(nullable = false)
-        private String password;
+      @Column(nullable = false)
+      private String password;
       
-        @Column(nullable = false)
-        private String name;
+      @Column(nullable = false)
+      private String name;
       
-        // ⭐️ ElementCollection을 사용해줘야 컬렉션 형태를 1 : N 테이블을 생성해준다.
-        @ElementCollection(fetch = FetchType.LAZY)
-        // ⭐️ Enum명 그대로 저장 - 미사용 시 숫자로 저장됨
-        @Enumerated(EnumType.STRING)
-        @Builder.Default
-        @Column(nullable = false)
-        private Set<Roles> roles = new HashSet<>();
-      }    
-      ```
-
+      // ⭐️ ElementCollection을 사용해줘야 컬렉션 형태를 1 : N 테이블을 생성해준다.
+      @ElementCollection(fetch = FetchType.LAZY)
+      // ⭐️ Enum명 그대로 저장 - 미사용 시 숫자로 저장됨
+      @Enumerated(EnumType.STRING)
+      @Builder.Default
+      @Column(nullable = false)
+      private Set<Roles> roles = new HashSet<>();
+    }    
+    ```
+- 회원가입
+  - 
 
 ## TODO List
 
