@@ -3,6 +3,9 @@ package com.yoo.securityStudy.config;
 import com.yoo.securityStudy.security.handler.CustomAccessDeniedHandler;
 import com.yoo.securityStudy.security.handler.CustomAuthFailureHandler;
 import com.yoo.securityStudy.security.handler.CustomAuthenticationEntryPoint;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.boot.autoconfigure.security.servlet.PathRequest;
@@ -12,9 +15,13 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 import org.springframework.stereotype.Component;
+
+import java.io.IOException;
 
 @Component
 @RequiredArgsConstructor
@@ -51,11 +58,11 @@ public class SecurityConfig {
             // cors.configurationSource(CorsConfigurationSource)
         });
 
-        http.formLogin(Customizer.withDefaults());
         // 👉 로그인을 사용할 loginProcessingUrl을 설정해준다.
-        http.formLogin(login ->{
-            login.failureHandler(customAuthFailureHandler);
-        } );
+        http.formLogin(login -> {
+                    login.loginProcessingUrl("/member/login");
+                    login.failureHandler(customAuthFailureHandler);
+                });
 
 
         // 👉 Security HTTP Basic 인증 ❌ - 웹 상단 알림창으로 로그인이 뜨는 것 방지
@@ -91,7 +98,7 @@ public class SecurityConfig {
     public WebSecurityCustomizer webSecurityCustomizer(){
         return web -> web.ignoring()
                 // Login 접근 허용
-                .requestMatchers(HttpMethod.POST,"/member/login")
+                //.requestMatchers(HttpMethod.POST,"/member/login")
                 // Spring Boot의 resources/static 경로의 정적 파일들 접근 허용
                 .requestMatchers(PathRequest.toStaticResources().atCommonLocations());
     }
