@@ -222,8 +222,9 @@ dependencies {
        }
        ```   
 - `SecurityConfig` 설정
-  - 의존성 주입 후 `formLogin()`내 함수 등록 `loginProcessingUrl("url"),failureHandler(customAuthFailureHandler)`
-  - ℹ️ 중요 확인 사항 [ 삽질 이틀함 ]
+  - 의존성 주입 후 `formLogin()`내 함수 등록 `failureHandler(customAuthFailureHandler)`
+  - ℹ️ 중요 확인 사항
+    - `loginProcessingUrl()`에 등록된 주소는 Controller가 없다 action="주소"에 해당되는 값이다.
     - `ignoring()`에 LoginProcessingUrl을 등록하면 안된다. 
       - Spring Security의 필터에서 제외 되기에 FailureHandler를 등록해도 제외된다.
       - 사용 했던 이유는 로그인 페이지는 접근이 무조건 가능해야한다 생각함
@@ -241,7 +242,7 @@ dependencies {
       @Bean
       public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
     
-        // 👉 로그인을 사용할 loginProcessingUrl을 설정해준다.
+        // 👉 로그인을 사용할 loginProcessingUrl을  Front단 action 주소임 - 컨트롤러 없음 설정해준다.
         http.formLogin(login->login.loginProcessingUrl("/member/login")
                 .failureHandler(customAuthFailureHandler));      
     
@@ -269,7 +270,8 @@ dependencies {
 ### `AuthFailureHandler`를 사용하지 않고 계정 및 비밀번호 예외 처리 방법
 - 방법은 크게 2가지가 있다.
   - `AbstractAuthenticationProcessingFilter`를 상속한 클래스를 만든 후 Filter 순서를 바꾼다.
-  - 
+  - `@RestControllerAdvice`를 지정한 ExceptionController를 구현하여 처리하는 방법
+- 
 
 
 ### UserDetailService 설정
