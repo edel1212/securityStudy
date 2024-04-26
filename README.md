@@ -270,7 +270,51 @@ dependencies {
     ```  
 
 ### UserDetailService 설정
-- 
+- **DB를** 통해 회원을 관리하기 위해서는 꼭 필요한 설정이다.
+- `UserDetailsService`를 구현한 구현체 클래스가 필요하다.
+  - 해당 Interface가 구현을 강제하는 메서드인 `UserDetails loadUserByUsername()`가 인증을 진행한다.
+    - `UserDetails`또한 Interface이며, 해당 Interface를 구현한 User를 반환하거나 상속한 Class를 반환해줘야한다.
+      - `User`를 반환해도 괜찮지만 아이디, 패스워드, 권한 밖에 없으므로  상속을 통해 다양한 데이터를 객체로 
+       담아 사용하기 위해서는 상속을 통해 사용해주자.
+- Table - Entity
+  - 권한의 경우 Enum을 통해 Table을 생성한다.
+    - `@ElementCollection(fetch = FetchType.LAZY)` 어노테이션을 통해 해당 테이블은 `회원ID, 권한`이 PK로 설정된다.
+    -  `@Enumerated(EnumType.STRING)`를 통해 Enum이 숫자가 아닌 문자형태로 지정한 권한이 저장된다.
+  - Class
+    - 권한 Roles
+      ```java
+      public enum Roles {
+        USER ,
+        MANAGER ,
+        ADMIN ,
+      }
+      ```
+    - 회원 Member
+      ```java
+      @Entity
+      @AllArgsConstructor
+      @NoArgsConstructor
+      @Getter
+      @Builder
+      public class Member {
+        @Id
+        private String id;
+      
+        @Column(nullable = false)
+        private String password;
+      
+        @Column(nullable = false)
+        private String name;
+      
+        // ⭐️ ElementCollection을 사용해줘야 컬렉션 형태를 1 : N 테이블을 생성해준다.
+        @ElementCollection(fetch = FetchType.LAZY)
+        // ⭐️ Enum명 그대로 저장 - 미사용 시 숫자로 저장됨
+        @Enumerated(EnumType.STRING)
+        @Builder.Default
+        @Column(nullable = false)
+        private Set<Roles> roles = new HashSet<>();
+      }    
+      ```
 
 
 ## TODO List

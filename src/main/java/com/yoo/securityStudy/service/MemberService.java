@@ -24,8 +24,6 @@ public interface MemberService {
                 .build();
     }
 
-
-
     // User객체의 형태에 맞는 객체 주입
     default Collection<? extends GrantedAuthority> authorities(Set<Roles> roles){
         return roles.stream()
