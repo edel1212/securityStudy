@@ -1,6 +1,7 @@
 # Spring Security Study
 
-### Security Depenency
+### Security
+Depenency
 
 - 의존성을 추가하는 순간부터 모든 요청은 Scurity의 Filter를 거치게 된다.
   - 따라서 모든 요청은 Security에서 기본적으로 제공되는 LoginForm으로 이동된다.
@@ -271,7 +272,21 @@ dependencies {
 - 방법은 크게 2가지가 있다.
   - `AbstractAuthenticationProcessingFilter`를 상속한 클래스를 만든 후 Filter 순서를 바꾼다.
   - `@RestControllerAdvice`를 지정한 ExceptionController를 구현하여 처리하는 방법
-- 
+- ✨ `AbstractAuthenticationProcessingFilter` 방법
+  - Spring Security의 필터의 순서를 바꿔서 진행하는 방법이다.
+    - Security의 사용 방법에서 크게 벗어나지 않지만 가독성이 떨어지는 측면이 있다.
+    - 로그인 시 파라미터를 JSON으로 받기 위해 추가적인 설정이 필요하다.
+      - `HttpServletRequest request`에서 `getParameter()`를 사용하는 form 방식을 사용한다면 크게 불편한 문제는 아니다.
+  - 사용 방법
+    - `AbstractAuthenticationProcessingFilter`를 상속하는 Class 생성
+      - ✏️ 중요 
+        - Bean 등록 대상이 아닌 객체 생성을 통해 주입되는 Class 이므로 `@Component`와 같은 어노테이션은 불필요
+        - 생성자 메서드의 `super(defaultFilterProcessesUrl);`에 전송되는 파라미터 값은 로그인 `action url path`이다 
+      - `Authentication attemptAuthentication()`메서드 구현은 필수이다
+        - 로그인 관련 메서드이다.
+      - 성공 시, 실패 시 핸들링을 해주기 위해서는 각각 필요한 메서드를 `@Override`해줘야한다.
+        - 성공 : `void successfulAuthentication()`
+        - 실패 : `void unsuccessfulAuthentication()`
 
 
 ### UserDetailService 설정
