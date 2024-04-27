@@ -29,7 +29,7 @@ public class CustomAuthenticationEntryPoint implements AuthenticationEntryPoint 
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         ErrorResponse errorResponse = ErrorResponse.builder()
                 .code(scUnauthorized)
-                .message("로그인 후 접근해주세요")
+                .message(authException.getMessage())
                 .build();
         response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
     }
