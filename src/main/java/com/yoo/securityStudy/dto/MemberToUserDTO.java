@@ -19,13 +19,13 @@ import java.util.Set;
 @Getter
 @Setter
 @ToString
-public class MemberDTO extends User {
+public class MemberToUserDTO extends User {
     private String id;
     private String password;
     private String name;
     private Set<Roles> roles;
 
-    public MemberDTO(String id
+    public MemberToUserDTO(String id
             , String password
             , String name
             , Collection<? extends GrantedAuthority> authorities

@@ -1,4 +1,4 @@
-package com.yoo.securityStudy.dto;
+package com.yoo.securityStudy.dto.member.req;
 
 import com.yoo.securityStudy.entity.enums.Roles;
 import lombok.*;
@@ -10,7 +10,9 @@ import java.util.Set;
 @Getter
 @Setter
 @Builder
-public class JwtLoginDTO {
-    private String memberId;
+public class SignUpReq {
+    private String id;
+    private String password;
+    private String name;
     private Set<Roles> roles;
 }

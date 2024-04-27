@@ -7,38 +7,37 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.boot.autoconfigure.security.servlet.PathRequest;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.stereotype.Component;
 
-@Component
+@Configuration
 @RequiredArgsConstructor
 @Log4j2
 public class SecurityConfig {
-
+    // DB를 사용한 로그인을 위한 Service
     private final UserDetailsService memberService;
-
     // 권한 제어 핸들러
     private final CustomAccessDeniedHandler customAccessDeniedHandler;
     // 접근 제어 핸들러
     private final CustomAuthenticationEntryPoint customAuthenticationEntryPoint;
-    // 인증 제어 핸들러
+    // 인증 실패 제어 핸들러
     private final CustomAuthFailureHandler customAuthFailureHandler;
 
-    /**
-     * - SecurityFilterChain << 아무 옵션 없이 적용 시 모든 페이지 접근이 허용된다.
-     * */
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
-
         log.info("-------------------------");
-        log.info("Filter Chain");
+        log.info(" 1) Security Filter Chain");
         log.info("-------------------------");
 
+        /*************************************************/
+        /** Default Setting **/
+        /*************************************************/
         // 👉 CSRF 사용 ❌
         http.csrf(csrf -> csrf.disable());
         // 👉 CORS 설정
@@ -49,22 +48,16 @@ public class SecurityConfig {
              * */
             // cors.configurationSource(CorsConfigurationSource)
         });
-
-        // 👉  Default Login form 설정
-        //http.formLogin(Customizer.withDefaults());
-
-        // 👉 기본 설정 로그인 form 사용 ❌
-        http.formLogin(login->login.loginProcessingUrl("/login")
-                .failureHandler(customAuthFailureHandler));
         // 👉 Security HTTP Basic 인증 ❌ - 웹 상단 알림창으로 로그인이 뜨는 것 방지
         http.httpBasic(AbstractHttpConfigurer::disable);
+        // 세션 관련 설정  -  "SessionCreationPolicy.STATELESS" 스프링시큐리티가 생성하지도않고 기존것을 사용하지도 않음
+        http.sessionManagement(session-> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
         // 👉 모든 접근 제한
-        http.authorizeHttpRequests( access ->
-                        access.requestMatchers("/**")
-                                .authenticated()
-                                .anyRequest().authenticated()
-                );
+        http.authorizeHttpRequests( access ->{
+            // 어떠한 요청에도 검사 시작
+            access.anyRequest().authenticated();
+        });
 
         // 👉 UserDetailService 지정 - 로그인 시 내가 지정한 비즈니스 로직을 사용한다.
        http.userDetailsService(memberService);
@@ -88,7 +81,7 @@ public class SecurityConfig {
     @Bean
     public WebSecurityCustomizer webSecurityCustomizer(){
         return web -> web.ignoring()
-                // Login 접근 허용
+                // 로그인 접근은 누구나 허용
                 .requestMatchers(HttpMethod.POST,"/member/login")
                 // Spring Boot의 resources/static 경로의 정적 파일들 접근 허용
                 .requestMatchers(PathRequest.toStaticResources().atCommonLocations());

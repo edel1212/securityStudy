@@ -9,14 +9,16 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.InternalAuthenticationServiceException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationFailureHandler;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 @Log4j2
 @Component
-public class CustomAuthFailureHandler extends SimpleUrlAuthenticationFailureHandler {
+public class CustomAuthFailureHandler implements AuthenticationFailureHandler {
     @Override
     public void onAuthenticationFailure(HttpServletRequest request, HttpServletResponse response, AuthenticationException exception) throws IOException {
         log.info("- Custom Auth Failure Handler 접근 -");
@@ -30,11 +32,13 @@ public class CustomAuthFailureHandler extends SimpleUrlAuthenticationFailureHand
             errorMessage = "존재하지 않는 계정입니다.";
         } else {
             errorMessage = "알 수없는 오류입니다.";
-        }
+        } // if - else
         ErrorResponse errorResponse = ErrorResponse.builder()
                 .code(HttpServletResponse.SC_UNAUTHORIZED)
                 .message(errorMessage)
                 .build();
+        // 응답의 문자 인코딩을 UTF-8로 설정
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
     }
 }
