@@ -1,6 +1,5 @@
 package com.yoo.securityStudy.config;
 
-import com.yoo.securityStudy.security.filter.JwtLoginFilter;
 import com.yoo.securityStudy.security.handler.CustomAccessDeniedHandler;
 import com.yoo.securityStudy.security.handler.CustomAuthFailureHandler;
 import com.yoo.securityStudy.security.handler.CustomAuthenticationEntryPoint;
@@ -16,7 +15,6 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
 @RequiredArgsConstructor
@@ -75,10 +73,6 @@ public class SecurityConfig {
                      // ✨ AuthenticationEntryPoint
                     .authenticationEntryPoint(customAuthenticationEntryPoint)
        );
-
-
-        // 👉  AbstractAuthenticationProcessingFilter 사용 시 설정 방법
-        http.addFilterBefore(new JwtLoginFilter("/member/login", jwtUtil), UsernamePasswordAuthenticationFilter.class );
 
         return http.build();
     }
