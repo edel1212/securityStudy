@@ -327,33 +327,50 @@ dependencies {
   }
   ```
 - `SecurityConfig` 설정
-```java
+  ```java
+  
+  @Configuration
+  @RequiredArgsConstructor
+  @Log4j2
+  public class SecurityConfig {
+      // 인증 실패 제어 핸들러
+      private final JwtUtil jwtUtil;
+  
+      @Bean
+      public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
+          // 👉  필터의 순서를 변경해준다.
+          http.addFilterBefore(new JwtLoginFilter("/member/login", jwtUtil)
+                  // 비밀번호 필터보다 먼저 실행한다.
+                  , UsernamePasswordAuthenticationFilter.class );
+          return http.build();
+      }
+  
+  }
+  ```
 
-@Configuration
-@RequiredArgsConstructor
-@Log4j2
-public class SecurityConfig {
-    // DB를 사용한 로그인을 위한 Service
-    private final UserDetailsService memberService;
-
-    // 인증 실패 제어 핸들러
-    private final JwtUtil jwtUtil;
-
-    @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
-
-        // 👉 UserDetailService 지정 - 로그인 시 내가 지정한 비즈니스 로직을 사용한다.
-        http.userDetailsService(memberService);
-        
-        // 👉  AbstractAuthenticationProcessingFilter 사용 시 설정 방법
-        http.addFilterBefore(new JwtLoginFilter("/member/login", jwtUtil)
-                // 비밀번호 필터보다 먼저 실행한다.
-                , UsernamePasswordAuthenticationFilter.class );
-        return http.build();
-    }
-
-}
-```
+- ✨ `@RestControllerAdvice` 방법
+  - 간단하게 발생하는 예외를 Catch하여 반환하는 방법이다.
+  - 사용 방법
+    - `ExceptionController` 구현 코드
+        ```java
+        @RestControllerAdvice
+        @Log4j2
+        public class ExceptionController {
+    
+            // 💬 BadCredentialsException 발생 시 해당 Controller로 반환
+            @ExceptionHandler(BadCredentialsException.class)
+            public ResponseEntity badCredentialsException(BadCredentialsException e) {
+                ErrorResponse errorResponse = ErrorResponse.builder()
+                        .code(HttpServletResponse.SC_UNAUTHORIZED)
+                        .message("아이디와 비밀번호를 확인해주세요.")
+                        .build();
+                log.error("----------------------");
+                log.info(e.getMessage());
+                log.error("----------------------");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+            }
+        }
+        ```  
 
 
 ### UserDetailService 설정
