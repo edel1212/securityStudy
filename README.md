@@ -463,6 +463,106 @@ dependencies {
   }
   ``` 
 
+- ### 인증
+- `UserDetailsService`를 구한현 Class 와 메서드의 반환 타입인 User를 구현한 Class만 있으면 된다.
+  - `UserDetailsService`
+    - 필수로 `UserDetails loadUserByUsername(String username)`를 구현해야한다.
+      - 해당 매서드가 인증을 담당한다
+      - 반환 형식은 User Class 형식이다.
+  - `User`
+    - 인증이 완료되면 반환 되어야하는 형식이다.
+    - 그대로 `new User()`를 통해 반환을 해도 괜찮다.
+      - 다만 확정성을 위해 더욱 많은 정보를 넣고 싶다면 상속을 해줘야하기에 확장한 Class를 구현해야 한다.
+    - 인증이 완료되면 `(Authentication authentication)`내 `authentication.getPrincipal()` 함수를 통해 확장한 Class의 객체에 접근이 가능하다.
+- `UserDetailsService` 구현 Class
+  ```java
+  public interface MemberService {
+  
+    // 👉 User Class 권한 형식에 맞게 변환
+    default Collection<? extends GrantedAuthority> authorities(Set<Roles> roles){
+      return roles.stream()
+              // ⭐️ "ROLE_" 접두사를 사용하는 이유는  Spring Security가 권한을 인식하고 처리할 때 해당 권한이 역할임을 명확하게 나타내기 위한 관례입니다.
+              .map(r -> new SimpleGrantedAuthority("ROLE_"+r.name()))
+              .collect(Collectors.toSet());
+    }
+  
+    /**
+     * Entity -> User DTO
+     *
+     * @param member the member
+     * @return the member to user dto
+     */
+    default MemberToUserDTO entityToUserDto(Member member){
+      return new MemberToUserDTO(member.getId()
+              , member.getPassword()
+              , member.getName()
+              // 👉 권한 형식에 맞게 변경
+              , this.authorities(member.getRoles())
+              ,  member.getRoles());
+    }
+  
+  }
+  
+  /////////////////////////////////////////////////////////////////////////////
+  
+  @Service
+  @RequiredArgsConstructor
+  @Log4j2
+  public class MemberServiceImpl implements MemberService, UserDetailsService {
+      private final MemberRepository memberRepository;
+      
+      @Transactional
+      @Override
+      public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+          log.info("-----------------");
+          log.info("Service 접근 - loadUserByUsername");
+          log.info("-----------------");
+  
+          // 1. userName(아이디)를 기준으로 데이터 존재 확인
+          Member member = memberRepository.findById(username)
+                  .orElseThrow(()->new UsernameNotFoundException(username));
+  
+          // 2. 존재한다면 해당 데이터를 기준으로 User객체를 생성 반환
+          //    🫵 중요 포인트는 해당 객체를 받아온 후 이후에 password 검증을 진행한다는 것이다
+          return this.entityToUserDto(member);
+      }
+  }
+  ```
+
+- `User` 상속 Class
+  ```java
+  /**
+   * extends User 를 사용하는 이유는 간단하다
+   * UserDetails를 반환하는 loadUserByUsername()메서드에서
+   * - 아이디, 비밀번호, 권한 << 이렇게 3개만 있으면 User를 사용해도 되지만
+   *
+   * 그렇지 않을 경우 추가적은 정보를 갖는 경우 아래와 같이 DTO를 추가후 Super()를 통해
+   * 부모에게 필요한 생성정보를 전달 하고 나머지는 내가 필요한 정보를 들고 있기 위함이다.
+   * */
+  @Getter
+  @Setter
+  @ToString
+  public class MemberToUserDTO extends User {
+      private String id;
+      private String password;
+      private String name;
+      private Set<Roles> roles;
+  
+      public MemberToUserDTO(String id
+              , String password
+              , String name
+              , Collection<? extends GrantedAuthority> authorities
+              , Set<Roles> roles
+              ) {
+          super(id, password, authorities);
+          this.id = id;
+          this.password = password;
+          this.name = name;
+          this.roles = roles;
+      }
+  }
+  ```
+
 ## TODO List
 
 
