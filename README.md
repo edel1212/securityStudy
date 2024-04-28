@@ -1,12 +1,10 @@
 # Spring Security Study
 
-### Security
-Depenency
-
 - 의존성을 추가하는 순간부터 모든 요청은 Scurity의 Filter를 거치게 된다.
   - 따라서 모든 요청은 Security에서 기본적으로 제공되는 LoginForm으로 이동된다.
     - 계정 및 비밀번호는 로그에 써 있다.
 
+- Dependencies
 ```groovy
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-security'
@@ -14,7 +12,7 @@ dependencies {
 }
 ```
 
-### 기본 Security 설정
+## 기본 Security 설정
 
 - SpringBoot 버전이 올라가면서 Security 설정 방법이 변경되었다.
   - 작성일 기준 버전 `3.2.3`버전
@@ -86,7 +84,7 @@ dependencies {
   }
   ```
 
-### 예외 핸들러 설정
+## 예외 핸들러 설정
 
 - `AuthenticationEntryPoint` 설정
   - 인증이 실패했을 때 사용자를 리디렉션하거나 에러 메시지를 반환하는 역할을 담당함
@@ -268,7 +266,7 @@ dependencies {
     }    
     ```  
 
-### `AuthFailureHandler`를 사용하지 않고 계정 및 비밀번호 예외 처리 방법
+## `AuthFailureHandler`를 사용하지 않고 계정 및 비밀번호 예외 처리 방법
 - 방법은 크게 2가지가 있다.
   - `AbstractAuthenticationProcessingFilter`를 상속한 클래스를 만든 후 Filter 순서를 바꾼다.
   - `@RestControllerAdvice`를 지정한 ExceptionController를 구현하여 처리하는 방법
@@ -372,7 +370,7 @@ dependencies {
         }
         ```  
 
-### UserDetailService 설정
+## UserDetailService 설정
 - **DB를** 통해 회원을 관리하기 위해서는 꼭 필요한 설정이다.
 - `UserDetailsService`를 구현한 구현체 클래스가 필요하다.
   - 해당 Interface가 구현을 강제하는 메서드인 `UserDetails loadUserByUsername()`가 인증을 진행한다.
@@ -563,12 +561,44 @@ dependencies {
   }
   ```
 
+## JWT
+
+- Dependencies
+```groovy
+dependencies {
+	//Jwt
+	implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
+	implementation 'io.jsonwebtoken:jjwt-impl:0.11.5'
+	implementation 'io.jsonwebtoken:jjwt-jackson:0.11.5'
+}
+```
+
+- Setting
+```properties
+# application.yml
+############################
+##Jwt Setting
+############################
+jwt:    
+    # Token 만료 시간 - 다양한 방식으로 커스텀 가능하다 날짜 기준으로 계산 하려면 날짜로 하고 비즈니스로직에서 계산 등등
+    # Ex)  {expirationDays} * 24 * 60 * 60;
+    expiration_time: 60000
+    # 사용할 암호 - 알려지면 안되니 실제 사용 시에는 암호화해서 넣어주자 
+    secret: VlwEyVBsYt9V7zq57TejMnVUyzblYcfPQye08f7MGVA9XkHa
+```
+
+### Dpe
+
+
 ## TODO List
 
 
 
-- DB 계정 관리
-  - 권한별 접근
-- 커스텀 핸들러 적용
+
+- 권한별 접근
 - jwt
   - Refresh token
+- 소셜 로그인
+  - Google
+  - Kakao
+  - Naver
