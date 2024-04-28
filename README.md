@@ -287,6 +287,73 @@ dependencies {
       - 성공 시, 실패 시 핸들링을 해주기 위해서는 각각 필요한 메서드를 `@Override`해줘야한다.
         - 성공 : `void successfulAuthentication()`
         - 실패 : `void unsuccessfulAuthentication()`
+- `AbstractAuthenticationProcessingFilter`상속 구현 코드
+  ```java
+  public class JwtLoginFilter extends AbstractAuthenticationProcessingFilter {
+  
+      private JwtUtil jwtUtil;
+  
+      // ✨ 부모Class가 생성자가 있기에 super()를 통해 url을 주입
+      protected JwtLoginFilter(String defaultFilterProcessesUrl, JwtUtil jwtUtil) {
+          super(defaultFilterProcessesUrl); // 👉 여기에 입력되는것이 login path이다
+          this.jwtUtil = jwtUtil;
+      }
+  
+      // 👉 인증 처리 - 필수 구현 메서드
+      @Override
+      public Authentication attemptAuthentication(HttpServletRequest request, HttpServletResponse response) throws AuthenticationException, IOException, ServletException {
+          // ✨ 필요에 맞는 parameter명을 맞춰서 사용해주자
+          String email = request.getParameter("아이디 파라미터명");
+          String pw    = request.getParameter("패스워드 파라미터명");
+          return null;
+      }시
+  
+      // 성공 시
+      @Override
+      protected void successfulAuthentication(HttpServletRequest request, HttpServletResponse response, FilterChain chain, Authentication authResult) throws IOException, ServletException {
+          // 아래의 정보를 통해 성공 로직을 채울 수 있음
+          authResult.getAuthorities();
+          authResult.getPrincipal();
+          super.successfulAuthentication(request, response, chain, authResult);
+      }
+  
+      // 실패 시
+      @Override
+      protected void unsuccessfulAuthentication(HttpServletRequest request, HttpServletResponse response, AuthenticationException failed) throws IOException, ServletException {
+          // TODO Fail 시 설정
+          super.unsuccessfulAuthentication(request, response, failed);
+      }
+  
+  }
+  ```
+- `SecurityConfig` 설정
+```java
+
+@Configuration
+@RequiredArgsConstructor
+@Log4j2
+public class SecurityConfig {
+    // DB를 사용한 로그인을 위한 Service
+    private final UserDetailsService memberService;
+
+    // 인증 실패 제어 핸들러
+    private final JwtUtil jwtUtil;
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
+
+        // 👉 UserDetailService 지정 - 로그인 시 내가 지정한 비즈니스 로직을 사용한다.
+        http.userDetailsService(memberService);
+        
+        // 👉  AbstractAuthenticationProcessingFilter 사용 시 설정 방법
+        http.addFilterBefore(new JwtLoginFilter("/member/login", jwtUtil)
+                // 비밀번호 필터보다 먼저 실행한다.
+                , UsernamePasswordAuthenticationFilter.class );
+        return http.build();
+    }
+
+}
+```
 
 
 ### UserDetailService 설정
