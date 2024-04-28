@@ -15,7 +15,7 @@ public class JwtLoginFilter extends AbstractAuthenticationProcessingFilter {
 
     private JwtUtil jwtUtil;
 
-    protected JwtLoginFilter(String defaultFilterProcessesUrl, JwtUtil jwtUtil) {
+    public JwtLoginFilter(String defaultFilterProcessesUrl, JwtUtil jwtUtil) {
         super(defaultFilterProcessesUrl); // 👉 여기에 입력되는것이 login path이다
         this.jwtUtil = jwtUtil;
     }

@@ -1,5 +1,6 @@
 package com.yoo.securityStudy.config;
 
+import com.yoo.securityStudy.security.filter.JwtLoginFilter;
 import com.yoo.securityStudy.security.handler.CustomAccessDeniedHandler;
 import com.yoo.securityStudy.security.handler.CustomAuthFailureHandler;
 import com.yoo.securityStudy.security.handler.CustomAuthenticationEntryPoint;
@@ -15,6 +16,7 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
 @RequiredArgsConstructor
@@ -28,6 +30,9 @@ public class SecurityConfig {
     private final CustomAuthenticationEntryPoint customAuthenticationEntryPoint;
     // 인증 실패 제어 핸들러
     private final CustomAuthFailureHandler customAuthFailureHandler;
+
+    // 인증 실패 제어 핸들러
+    private final JwtUtil jwtUtil;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
@@ -62,14 +67,18 @@ public class SecurityConfig {
         // 👉 UserDetailService 지정 - 로그인 시 내가 지정한 비즈니스 로직을 사용한다.
        http.userDetailsService(memberService);
 
-        // Custom Exception Handling
-        http.exceptionHandling(handling ->
+       // Custom Exception Handling
+       http.exceptionHandling(handling ->
                handling
                     // ✨ Access Denied Handling
                     .accessDeniedHandler(customAccessDeniedHandler)
                      // ✨ AuthenticationEntryPoint
                     .authenticationEntryPoint(customAuthenticationEntryPoint)
-        );
+       );
+
+
+        // 👉  AbstractAuthenticationProcessingFilter 사용 시 설정 방법
+        http.addFilterBefore(new JwtLoginFilter("/member/login", jwtUtil), UsernamePasswordAuthenticationFilter.class );
 
         return http.build();
     }
