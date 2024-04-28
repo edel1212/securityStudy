@@ -26,11 +26,6 @@ public class SecurityConfig {
     private final CustomAccessDeniedHandler customAccessDeniedHandler;
     // 접근 제어 핸들러
     private final CustomAuthenticationEntryPoint customAuthenticationEntryPoint;
-    // 인증 실패 제어 핸들러
-    private final CustomAuthFailureHandler customAuthFailureHandler;
-
-    // 인증 실패 제어 핸들러
-    private final JwtUtil jwtUtil;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{

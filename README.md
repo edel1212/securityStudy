@@ -372,7 +372,6 @@ dependencies {
         }
         ```  
 
-
 ### UserDetailService 설정
 - **DB를** 통해 회원을 관리하기 위해서는 꼭 필요한 설정이다.
 - `UserDetailsService`를 구현한 구현체 클래스가 필요하다.
@@ -380,7 +379,7 @@ dependencies {
     - `UserDetails`또한 Interface이며, 해당 Interface를 구현한 User를 반환하거나 상속한 Class를 반환해줘야한다.
       - `User`를 반환해도 괜찮지만 아이디, 패스워드, 권한 밖에 없으므로  상속을 통해 다양한 데이터를 객체로 
        담아 사용하기 위해서는 상속을 통해 사용해주자.
-- Entity
+- ### Entity
   - 권한의 경우 Enum을 통해 Table을 생성한다.
     - `@ElementCollection(fetch = FetchType.LAZY)` 어노테이션을 통해 해당 테이블은 `회원ID, 권한`이 PK로 설정된다.
     -  `@Enumerated(EnumType.STRING)`를 통해 Enum이 숫자가 아닌 문자형태로 지정한 권한이 저장된다.
@@ -418,8 +417,51 @@ dependencies {
       private Set<Roles> roles = new HashSet<>();
     }    
     ```
-- 회원가입
-  - 
+    
+- ### 회원가입
+- `PasswordEncoder` 설정
+  - 미사용 시 Spring Security 내에서 비밀번호를 인가 해주지 않는다.
+  - `@Bean`등록 필수
+    - `SecurityConfig` 내부에서 PasswordEncoder의 내용을 변경 하고 Bean 등록 시 Cycle 에러가 발생하니 주의해주자.
+      ```text
+      The dependencies of some of the beans in the application context form a cycle:
+       
+      securityConfig defined in file [/Users/yoo/Desktop/Project/securityStudy/build/classes/java/main/com/yoo/securityStudy/config/SecurityConfig.class]
+      ┌─────┐
+      |  memberServiceImpl defined in file [/Users/yoo/Desktop/Project/securityStudy/build/classes/java/main/com/yoo/securityStudy/service/MemberServiceImpl.class]
+      └─────┘
+      ```
+  - 사용 코드
+  ```java
+  // Bean Scan 대상 지정
+  @Component
+  public class AppConfig {
+    // 👉 Bean 등록
+    @Bean
+    public PasswordEncoder passwordEncoder(){
+        return PasswordEncoderFactories.createDelegatingPasswordEncoder();
+    }
+  } 
+  ```
+- 비즈니스 로직
+  - 사용 코드
+  ```java
+  @Service
+  @RequiredArgsConstructor
+  @Log4j2
+  public class MemberServiceImpl implements MemberService, UserDetailsService {
+      private final MemberRepository memberRepository;
+      // 👉 의존성 주입
+      private final PasswordEncoder passwordEncoder;
+      @Override
+      public SignUpRes registerMember(SignUpReq signUpReq) {
+          // 👉 passwordEncoder.encode() 메서드를 통해 비밀번호 암호화
+          signUpReq.setPassword(passwordEncoder.encode(signUpReq.getPassword()));
+          Member member = memberRepository.save(this.dtoToEntity(signUpReq));
+          return this.entityToSignUpRes(member);
+      }
+  }
+  ``` 
 
 ## TODO List
 
