@@ -702,8 +702,44 @@ public class JwtUtil {
 }
 ```
 
-
-### Dpe
+- ### Jwt 인증 흐름
+- 로그인 요청이 들어온다.
+  - 해당 요청 Url Path는 인증을 거치지 않게 Security Config에서 설정 `web -> web.ignoring().requestMatchers(HttpMethod.POST,"/member/login")`
+  - 의존성 주입된 `AuthenticationManagerBuilder`의 `.getObject().authenticate(UsernamePasswordAuthenticationToke)` 로직 이동
+      ```java
+      @RequestMapping(value = "/member", produces = MediaType.APPLICATION_JSON_VALUE)
+      @RequiredArgsConstructor
+      @RestController
+      @Log4j2
+      public class MemberController {
+    
+        private final AuthenticationManagerBuilder authenticationManagerBuilder;
+        private final JwtUtil jwtUtil;
+    
+        @PostMapping("/login")
+        public ResponseEntity login(@RequestBody LoginDTO loginDTO){
+          log.info("------------------");
+          log.info("Login Controller 접근");
+          log.info("------------------");
+          // 1. username + password 를 기반으로 Authentication 객체 생성
+          // 이때 authentication 은 인증 여부를 확인하는 authenticated 값이 false
+          UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(loginDTO.getId()
+                  , loginDTO.getPassword());
+    
+          /** 실제 검증 후 반환하는  authentication에는 내가 커스텀한 UserDetail정보가 들어가 있음*/
+          // 2. 실제 검증. authenticate() 메서드를 통해 요청된 Member 에 대한 검증 진행
+          // authenticate 메서드가 실행될 때 CustomUserDetailsService 에서 만든 loadUserByUsername 메서드 실행
+          Authentication authentication = authenticationManagerBuilder.getObject().authenticate(authenticationToken);
+    
+          JwtToken token = jwtUtil.generateToken(authentication);
+    
+          return ResponseEntity.ok().body(token);
+        }
+    
+      }
+      ```
+- 작성했던 `UserDetailServer`의 `loadUserByUsername(String username)` 메서드를 사용하여 User 객체 생성
+- 인증이 완료되었다면 `jwtUtil`을 사용하여 토큰 생성
 
 
 ## TODO List
