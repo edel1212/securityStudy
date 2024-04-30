@@ -742,6 +742,15 @@ public class JwtUtil {
 - 인증이 완료되었다면 `jwtUtil`을 사용하여 토큰 생성
 
 
+## Jwt 인증 절차
+
+- 기존 Security Filter에서 순서를 변경해줘야한다.
+- `@Component`를 통해 Bean 스캔 대상임을 지정해준다.
+- `OncePerRequestFilter`를 상속한 Class에서 처리한다.
+  - 구현이 강제 되어있는 `doFilterInternal()`메서드에서 로직을 구현해준다.
+    - 내부에서 받아오는 `HttpServletRequest request`에서 Header에 포함되어있는 토큰값을 검증한다.
+  - 값에 이상이 없을 경우 ` SecurityContextHolder.getContext().setAuthentication(authentication);`를 통해 권한을 등록해준다.
+
 ## TODO List
 
 
