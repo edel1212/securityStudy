@@ -2,16 +2,20 @@ package com.yoo.securityStudy.config;
 
 import com.yoo.securityStudy.security.dto.JwtToken;
 import io.jsonwebtoken.*;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.util.Date;
 import java.util.stream.Collectors;
+
+import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 
 @Log4j2
 @Component
@@ -105,6 +109,17 @@ public class JwtUtil {
         } catch (ExpiredJwtException e) {
             return e.getClaims();
         }// try - catch
+    }
+
+    /**
+     * JWT 값 추출
+     * @param request
+     * @return String Jwt Token 원문 값
+     */
+    private String resolveToken(HttpServletRequest request) {
+        String bearerToken = request.getHeader(AUTHORIZATION);
+        if (bearerToken == null || !bearerToken.startsWith("Bearer ")) return null;
+        return bearerToken.replaceAll("Bearer ","");
     }
 
 }
