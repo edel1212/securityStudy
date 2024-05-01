@@ -116,7 +116,7 @@ public class JwtUtil {
      * @param request
      * @return String Jwt Token 원문 값
      */
-    private String resolveToken(HttpServletRequest request) {
+    public String resolveToken(HttpServletRequest request) {
         String bearerToken = request.getHeader(AUTHORIZATION);
         if (bearerToken == null || !bearerToken.startsWith("Bearer ")) return null;
         return bearerToken.replaceAll("Bearer ","");
