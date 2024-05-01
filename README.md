@@ -1,11 +1,10 @@
 # Spring Security Study
 
-### Security Depenency
-
 - 의존성을 추가하는 순간부터 모든 요청은 Scurity의 Filter를 거치게 된다.
   - 따라서 모든 요청은 Security에서 기본적으로 제공되는 LoginForm으로 이동된다.
     - 계정 및 비밀번호는 로그에 써 있다.
 
+- Dependencies
 ```groovy
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-security'
@@ -13,7 +12,7 @@ dependencies {
 }
 ```
 
-### 기본 Security 설정
+## 기본 Security 설정
 
 - SpringBoot 버전이 올라가면서 Security 설정 방법이 변경되었다.
   - 작성일 기준 버전 `3.2.3`버전
@@ -39,34 +38,32 @@ dependencies {
       public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
 
           log.info("-------------------------");
-          log.info("Filter Chain");
+          log.info(" 1) Security Filter Chain");
           log.info("-------------------------");
-
+          
+          /*************************************************/
+          /** Default Setting **/
+          /*************************************************/
           // 👉 CSRF 사용 ❌
           http.csrf(csrf -> csrf.disable());
           // 👉 CORS 설정
           http.cors(cors->{
               /**
-              * 참고 : https://velog.io/@juhyeon1114/Spring-security%EC%97%90%EC%84%9C-CORS%EC%84%A4%EC%A0%95%ED%95%98%EA%B8%B0
-              *    - 설정 클래스를 만든 후 주입해주면 Cors 설정이 한번에 가능함
-              * */
+               * 참고 : https://velog.io/@juhyeon1114/Spring-security%EC%97%90%EC%84%9C-CORS%EC%84%A4%EC%A0%95%ED%95%98%EA%B8%B0
+               *    - 설정 클래스를 만든 후 주입해주면 Cors 설정이 한번에 가능함
+               * */
               // cors.configurationSource(CorsConfigurationSource)
           });
-
-          // 👉  Default Login form 설정 - 사용 할경우
-          //http.formLogin(Customizer.withDefaults());
-
-          // 👉 기본 설정 로그인 form 사용 ❌
-          http.formLogin(login->login.disable());
           // 👉 Security HTTP Basic 인증 ❌ - 웹 상단 알림창으로 로그인이 뜨는 것 방지
           http.httpBasic(AbstractHttpConfigurer::disable);
-
+          // 👉 세션 관련 설정  -  "SessionCreationPolicy.STATELESS" 스프링시큐리티가 생성하지도않고 기존것을 사용하지도 않음
+          http.sessionManagement(session-> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+          
           // 👉 모든 접근 제한
-          http.authorizeHttpRequests( access ->
-                          access.requestMatchers("/**")
-                                  .authenticated()
-                                  .anyRequest().authenticated()
-                  );
+          http.authorizeHttpRequests( access ->{
+              // 어떠한 요청에도 검사 시작
+              access.anyRequest().authenticated();
+          });
 
           return http.build();
       }
@@ -87,7 +84,7 @@ dependencies {
   }
   ```
 
-### 예외 핸들러 설정
+## 예외 핸들러 설정
 
 - `AuthenticationEntryPoint` 설정
   - 인증이 실패했을 때 사용자를 리디렉션하거나 에러 메시지를 반환하는 역할을 담당함
@@ -187,11 +184,13 @@ dependencies {
     ```  
 
 - `AuthFailureHandler` 설정
-  - 해당 핸들러는 로그인 실패 시 핸들링 하는 핸들러이다.
-  - 사용하기 위해서는 로그인 form 설정을 해줘야한다.
-    - 단 현재 예제에서는 form 을 사용하지 않으니 `loginProcessingUrl()`설정을 해준 후 지정해준다.
+  - 해당 핸들러는 로그인 실패 시 핸들링 하는 핸들러이다. - ℹ️ 단 ! ***jwt 를사용할 경우 사용이 불가능하다.***
+  - 내부 Form 설정을 사용할 경우만 사용이 가능하다
   - 사용 방법
-    - `SimpleUrlAuthenticationFailureHandler`를 상속한 클래스 제작
+    - `SimpleUrlAuthenticationFailureHandler`를 상속한(`extends`) 클래스 제작 또는 `AuthenticationFailureHandler`를 구현한(`implements`) 클래스를 제작
+      - `SimpleUrlAuthenticationFailureHandler`를 사용하는 이유는?
+        - `AuthenticationFailureHandler`를 구한현 클래스이므로 같은 기능을 작동한다.
+        - SimpleUrl을 사용할 경우 `setDefaultFailureUrl()`를 사용하여 이동할 URL을 지정 가능하다.
     - Bean Scan 대상에 올려주기 위해 `@Component`를 추가해주자
        ```java
        @Log4j2
@@ -215,12 +214,21 @@ dependencies {
                    .code(HttpServletResponse.SC_UNAUTHORIZED)
                    .message(errorMessage)
                    .build();
+           // 응답의 문자 인코딩을 UTF-8로 설정
+           response.setCharacterEncoding(StandardCharsets.UTF_8.name());
            response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
          }
        }
        ```   
 - `SecurityConfig` 설정
-  - 의존성 주입 후 `exceptionHandling()`에 등록
+  - 의존성 주입 후 `formLogin()`내 함수 등록 `failureHandler(customAuthFailureHandler)`
+  - ℹ️ 중요 확인 사항
+    - `loginProcessingUrl()`에 등록된 주소는 Controller가 없다 action="주소"에 해당되는 값이다.
+    - `ignoring()`에 LoginProcessingUrl을 등록하면 안된다. 
+      - Spring Security의 필터에서 제외 되기에 FailureHandler를 등록해도 제외된다.
+      - 사용 했던 이유는 로그인 페이지는 접근이 무조건 가능해야한다 생각함
+        - 하지만 `formLogin()`에서 `loginProcessingUrl()`를 지정하면 누구나 접근이 가능 했음..!
+  - 
     ```java
     @Component
     @RequiredArgsConstructor
@@ -233,24 +241,525 @@ dependencies {
       @Bean
       public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
     
-        // 👉 로그인을 사용할 loginProcessingUrl을 설정해준다.
-        http.formLogin(login->login.loginProcessingUrl("/login")
+        // 👉 로그인을 사용할 loginProcessingUrl을  Front단 action 주소임 - 컨트롤러 없음 설정해준다.
+        http.formLogin(login->login.loginProcessingUrl("/member/login")
                 .failureHandler(customAuthFailureHandler));      
     
         return http.build();
       }
     
-    
-    
+      /**
+       * Security - Custom Bean 등록
+       * */
+      @Bean
+      public WebSecurityCustomizer webSecurityCustomizer(){
+          return web -> web.ignoring()
+                  /*********************************************/
+                  /** 아래 주석 내용떄문에 삽질함 ... */
+                  /*********************************************/
+                  // Login 접근 허용
+                  //.requestMatchers(HttpMethod.POST,"/member/login")
+        
+                  // Spring Boot의 resources/static 경로의 정적 파일들 접근 허용
+                  .requestMatchers(PathRequest.toStaticResources().atCommonLocations());
+      }
     }    
     ```  
+
+## `AuthFailureHandler`를 사용하지 않고 계정 및 비밀번호 예외 처리 방법
+- 방법은 크게 2가지가 있다.
+  - `AbstractAuthenticationProcessingFilter`를 상속한 클래스를 만든 후 Filter 순서를 바꾼다.
+  - `@RestControllerAdvice`를 지정한 ExceptionController를 구현하여 처리하는 방법
+- ✨ `AbstractAuthenticationProcessingFilter` 방법
+  - Spring Security의 필터의 순서를 바꿔서 진행하는 방법이다.
+    - Security의 사용 방법에서 크게 벗어나지 않지만 가독성이 떨어지는 측면이 있다.
+    - 로그인 시 파라미터를 JSON으로 받기 위해 추가적인 설정이 필요하다.
+      - `HttpServletRequest request`에서 `getParameter()`를 사용하는 form 방식을 사용한다면 크게 불편한 문제는 아니다.
+  - 사용 방법
+    - `AbstractAuthenticationProcessingFilter`를 상속하는 Class 생성
+      - ✏️ 중요 
+        - Bean 등록 대상이 아닌 객체 생성을 통해 주입되는 Class 이므로 `@Component`와 같은 어노테이션은 불필요
+        - 생성자 메서드의 `super(defaultFilterProcessesUrl);`에 전송되는 파라미터 값은 로그인 `action url path`이다 
+      - `Authentication attemptAuthentication()`메서드 구현은 필수이다
+        - 로그인 관련 메서드이다.
+      - 성공 시, 실패 시 핸들링을 해주기 위해서는 각각 필요한 메서드를 `@Override`해줘야한다.
+        - 성공 : `void successfulAuthentication()`
+        - 실패 : `void unsuccessfulAuthentication()`
+- `AbstractAuthenticationProcessingFilter`상속 구현 코드
+  ```java
+  public class JwtLoginFilter extends AbstractAuthenticationProcessingFilter {
+  
+      private JwtUtil jwtUtil;
+  
+      // ✨ 부모Class가 생성자가 있기에 super()를 통해 url을 주입
+      protected JwtLoginFilter(String defaultFilterProcessesUrl, JwtUtil jwtUtil) {
+          super(defaultFilterProcessesUrl); // 👉 여기에 입력되는것이 login path이다
+          this.jwtUtil = jwtUtil;
+      }
+  
+      // 👉 인증 처리 - 필수 구현 메서드
+      @Override
+      public Authentication attemptAuthentication(HttpServletRequest request, HttpServletResponse response) throws AuthenticationException, IOException, ServletException {
+          // ✨ 필요에 맞는 parameter명을 맞춰서 사용해주자
+          String email = request.getParameter("아이디 파라미터명");
+          String pw    = request.getParameter("패스워드 파라미터명");
+          return null;
+      }시
+  
+      // 성공 시
+      @Override
+      protected void successfulAuthentication(HttpServletRequest request, HttpServletResponse response, FilterChain chain, Authentication authResult) throws IOException, ServletException {
+          // 아래의 정보를 통해 성공 로직을 채울 수 있음
+          authResult.getAuthorities();
+          authResult.getPrincipal();
+          super.successfulAuthentication(request, response, chain, authResult);
+      }
+  
+      // 실패 시
+      @Override
+      protected void unsuccessfulAuthentication(HttpServletRequest request, HttpServletResponse response, AuthenticationException failed) throws IOException, ServletException {
+          // TODO Fail 시 설정
+          super.unsuccessfulAuthentication(request, response, failed);
+      }
+  
+  }
+  ```
+- `SecurityConfig` 설정
+  ```java
+  
+  @Configuration
+  @RequiredArgsConstructor
+  @Log4j2
+  public class SecurityConfig {
+      // 인증 실패 제어 핸들러
+      private final JwtUtil jwtUtil;
+  
+      @Bean
+      public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
+          // 👉  필터의 순서를 변경해준다.
+          http.addFilterBefore(new JwtLoginFilter("/member/login", jwtUtil)
+                  // 비밀번호 필터보다 먼저 실행한다.
+                  , UsernamePasswordAuthenticationFilter.class );
+          return http.build();
+      }
+  
+  }
+  ```
+
+- ✨ `@RestControllerAdvice` 방법
+  - 간단하게 발생하는 예외를 Catch하여 반환하는 방법이다.
+  - 사용 방법
+    - `ExceptionController` 구현 코드
+        ```java
+        @RestControllerAdvice
+        @Log4j2
+        public class ExceptionController {
+    
+            // 💬 BadCredentialsException 발생 시 해당 Controller로 반환
+            @ExceptionHandler(BadCredentialsException.class)
+            public ResponseEntity badCredentialsException(BadCredentialsException e) {
+                ErrorResponse errorResponse = ErrorResponse.builder()
+                        .code(HttpServletResponse.SC_UNAUTHORIZED)
+                        .message("아이디와 비밀번호를 확인해주세요.")
+                        .build();
+                log.error("----------------------");
+                log.info(e.getMessage());
+                log.error("----------------------");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+            }
+        }
+        ```  
+
+## UserDetailService 설정
+- **DB를** 통해 회원을 관리하기 위해서는 꼭 필요한 설정이다.
+- `UserDetailsService`를 구현한 구현체 클래스가 필요하다.
+  - 해당 Interface가 구현을 강제하는 메서드인 `UserDetails loadUserByUsername()`가 인증을 진행한다.
+    - `UserDetails`또한 Interface이며, 해당 Interface를 구현한 User를 반환하거나 상속한 Class를 반환해줘야한다.
+      - `User`를 반환해도 괜찮지만 아이디, 패스워드, 권한 밖에 없으므로  상속을 통해 다양한 데이터를 객체로 
+       담아 사용하기 위해서는 상속을 통해 사용해주자.
+- ### Entity
+  - 권한의 경우 Enum을 통해 Table을 생성한다.
+    - `@ElementCollection(fetch = FetchType.LAZY)` 어노테이션을 통해 해당 테이블은 `회원ID, 권한`이 PK로 설정된다.
+    -  `@Enumerated(EnumType.STRING)`를 통해 Enum이 숫자가 아닌 문자형태로 지정한 권한이 저장된다.
+  - ⭐️ 권한 Roles
+    ```java
+    public enum Roles {
+      USER ,
+      MANAGER ,
+      ADMIN ,
+    }
+    ```
+  - ⭐️ 회원 Member
+    ```java
+    @Entity
+    @AllArgsConstructor
+    @NoArgsConstructor
+    @Getter
+    @Builder
+    public class Member {
+      @Id
+      private String id;
+      
+      @Column(nullable = false)
+      private String password;
+      
+      @Column(nullable = false)
+      private String name;
+      
+      // ⭐️ ElementCollection을 사용해줘야 컬렉션 형태를 1 : N 테이블을 생성해준다.
+      @ElementCollection(fetch = FetchType.LAZY)
+      // ⭐️ Enum명 그대로 저장 - 미사용 시 숫자로 저장됨
+      @Enumerated(EnumType.STRING)
+      @Builder.Default
+      @Column(nullable = false)
+      private Set<Roles> roles = new HashSet<>();
+    }    
+    ```
+    
+- ### 회원가입
+- `PasswordEncoder` 설정
+  - 미사용 시 Spring Security 내에서 비밀번호를 인가 해주지 않는다.
+  - `@Bean`등록 필수
+    - `SecurityConfig` 내부에서 PasswordEncoder의 내용을 변경 하고 Bean 등록 시 Cycle 에러가 발생하니 주의해주자.
+      ```text
+      The dependencies of some of the beans in the application context form a cycle:
+       
+      securityConfig defined in file [/Users/yoo/Desktop/Project/securityStudy/build/classes/java/main/com/yoo/securityStudy/config/SecurityConfig.class]
+      ┌─────┐
+      |  memberServiceImpl defined in file [/Users/yoo/Desktop/Project/securityStudy/build/classes/java/main/com/yoo/securityStudy/service/MemberServiceImpl.class]
+      └─────┘
+      ```
+  - 사용 코드
+  ```java
+  // Bean Scan 대상 지정
+  @Component
+  public class AppConfig {
+    // 👉 Bean 등록
+    @Bean
+    public PasswordEncoder passwordEncoder(){
+        return PasswordEncoderFactories.createDelegatingPasswordEncoder();
+    }
+  } 
+  ```
+- 비즈니스 로직
+  - 사용 코드
+  ```java
+  @Service
+  @RequiredArgsConstructor
+  @Log4j2
+  public class MemberServiceImpl implements MemberService, UserDetailsService {
+      private final MemberRepository memberRepository;
+      // 👉 의존성 주입
+      private final PasswordEncoder passwordEncoder;
+      @Override
+      public SignUpRes registerMember(SignUpReq signUpReq) {
+          // 👉 passwordEncoder.encode() 메서드를 통해 비밀번호 암호화
+          signUpReq.setPassword(passwordEncoder.encode(signUpReq.getPassword()));
+          Member member = memberRepository.save(this.dtoToEntity(signUpReq));
+          return this.entityToSignUpRes(member);
+      }
+  }
+  ``` 
+
+- ### 인증
+- `UserDetailsService`를 구한현 Class 와 메서드의 반환 타입인 User를 구현한 Class만 있으면 된다.
+  - `UserDetailsService`
+    - 필수로 `UserDetails loadUserByUsername(String username)`를 구현해야한다.
+      - 해당 매서드가 인증을 담당한다
+      - 반환 형식은 User Class 형식이다.
+  - `User`
+    - 인증이 완료되면 반환 되어야하는 형식이다.
+    - 그대로 `new User()`를 통해 반환을 해도 괜찮다.
+      - 다만 확정성을 위해 더욱 많은 정보를 넣고 싶다면 상속을 해줘야하기에 확장한 Class를 구현해야 한다.
+    - 인증이 완료되면 `(Authentication authentication)`내 `authentication.getPrincipal()` 함수를 통해 확장한 Class의 객체에 접근이 가능하다.
+- `UserDetailsService` 구현 Class
+  ```java
+  public interface MemberService {
+  
+    // 👉 User Class 권한 형식에 맞게 변환
+    default Collection<? extends GrantedAuthority> authorities(Set<Roles> roles){
+      return roles.stream()
+              // ⭐️ "ROLE_" 접두사를 사용하는 이유는  Spring Security가 권한을 인식하고 처리할 때 해당 권한이 역할임을 명확하게 나타내기 위한 관례입니다.
+              .map(r -> new SimpleGrantedAuthority("ROLE_"+r.name()))
+              .collect(Collectors.toSet());
+    }
+  
+    /**
+     * Entity -> User DTO
+     *
+     * @param member the member
+     * @return the member to user dto
+     */
+    default MemberToUserDTO entityToUserDto(Member member){
+      return new MemberToUserDTO(member.getId()
+              , member.getPassword()
+              , member.getName()
+              // 👉 권한 형식에 맞게 변경
+              , this.authorities(member.getRoles())
+              ,  member.getRoles());
+    }
+  
+  }
+  
+  /////////////////////////////////////////////////////////////////////////////
+  
+  @Service
+  @RequiredArgsConstructor
+  @Log4j2
+  public class MemberServiceImpl implements MemberService, UserDetailsService {
+      private final MemberRepository memberRepository;
+      
+      @Transactional
+      @Override
+      public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+          log.info("-----------------");
+          log.info("Service 접근 - loadUserByUsername");
+          log.info("-----------------");
+  
+          // 1. userName(아이디)를 기준으로 데이터 존재 확인
+          Member member = memberRepository.findById(username)
+                  .orElseThrow(()->new UsernameNotFoundException(username));
+  
+          // 2. 존재한다면 해당 데이터를 기준으로 User객체를 생성 반환
+          //    🫵 중요 포인트는 해당 객체를 받아온 후 이후에 password 검증을 진행한다는 것이다
+          return this.entityToUserDto(member);
+      }
+  }
+  ```
+
+- `User` 상속 Class
+  ```java
+  /**
+   * extends User 를 사용하는 이유는 간단하다
+   * UserDetails를 반환하는 loadUserByUsername()메서드에서
+   * - 아이디, 비밀번호, 권한 << 이렇게 3개만 있으면 User를 사용해도 되지만
+   *
+   * 그렇지 않을 경우 추가적은 정보를 갖는 경우 아래와 같이 DTO를 추가후 Super()를 통해
+   * 부모에게 필요한 생성정보를 전달 하고 나머지는 내가 필요한 정보를 들고 있기 위함이다.
+   * */
+  @Getter
+  @Setter
+  @ToString
+  public class MemberToUserDTO extends User {
+      private String id;
+      private String password;
+      private String name;
+      private Set<Roles> roles;
+  
+      public MemberToUserDTO(String id
+              , String password
+              , String name
+              , Collection<? extends GrantedAuthority> authorities
+              , Set<Roles> roles
+              ) {
+          super(id, password, authorities);
+          this.id = id;
+          this.password = password;
+          this.name = name;
+          this.roles = roles;
+      }
+  }
+  ```
+
+## JWT
+
+- Dependencies
+```groovy
+dependencies {
+	//Jwt
+	implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
+	implementation 'io.jsonwebtoken:jjwt-impl:0.11.5'
+	implementation 'io.jsonwebtoken:jjwt-jackson:0.11.5'
+}
+```
+
+- Setting
+```properties
+# application.yml
+############################
+##Jwt Setting
+############################
+jwt:    
+    # Token 만료 시간 - 다양한 방식으로 커스텀 가능하다 날짜 기준으로 계산 하려면 날짜로 하고 비즈니스로직에서 계산 등등
+    # Ex)  {expirationDays} * 24 * 60 * 60;
+    expiration_time: 60000
+    # 사용할 암호 - 알려지면 안되니 실제 사용 시에는 암호화해서 넣어주자 
+    secret: VlwEyVBsYt9V7zq57TejMnVUyzblYcfPQye08f7MGVA9XkHa
+```
+
+
+- ### Jwt Business Logic
+- `@Value("${jwt.expiration_time}")`를 통해 properties의 값을 읽어 사용한다.
+- `@Component`를 통해 Bean 스캔 대상임을 지정해준다.
+- 토큰 생성 시 파라미터를 `(Authentication authentication)`로 받는 이유는 확정성 떄문이다.
+  - userDetailServer를 잘 구현했다면 커스텀한 인증 정보가 다 들어있기 때문이다. 
+```java
+public class JwtToken {
+  // Jwt 인증 타입 [ Bearer 사용 ]
+  private String grantType;
+  // 발급 토근
+  private String accessToken;
+  // 리프레쉬 토큰
+  private String refreshToken;
+}
+
+/////////////////////////////////////////////////////////////////////////////
+
+@Log4j2
+@Component
+public class JwtUtil {
+    @Value("${jwt.expiration_time}")
+    private Long accessTokenExpTime;
+    @Value("${jwt.secret}")
+    private String secret;
+
+    /**
+     * createAccessToken 이슈로 인해 재생성 중
+     *
+     * - 👉 Authentication을 통해 로그인한 정보를 받아서 사용이 가능하다!!
+     * */
+    public JwtToken generateToken(Authentication authentication){
+
+        // 로그인에 성공한 사용자의 권한을 가져온 후 문자열로 반환
+        // ex) "ROLE_USER,ROLE_MANAGER,ROLE_ADMIN"
+        String authorities = authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .collect(Collectors.joining(","));
+        // 로그인에 성공한 계정Id
+        String userName = authentication.getName();
+
+        // 토큰 만료시간 생성
+        ZonedDateTime now = ZonedDateTime.now();
+        ZonedDateTime tokenValidity = now.plusSeconds(this.accessTokenExpTime);
+
+        Claims claims = Jwts.claims();
+        claims.put("memberId", userName);
+        claims.put("auth", authorities);
+
+        // Jwt AccessToken 생성
+        String accessToken =  Jwts.builder()
+                .setClaims(claims)
+                .setIssuedAt(Date.from(Instant.now()))
+                .setExpiration(Date.from(tokenValidity.toInstant()))
+                .signWith(SignatureAlgorithm.HS256, secret)
+                .compact();
+
+        // Refresh Token 생성
+        // 토큰 만료시간 생성
+        ZonedDateTime reNow = ZonedDateTime.now();
+        ZonedDateTime reTokenValidity = reNow.plusSeconds(this.accessTokenExpTime);
+        String refreshToken = Jwts.builder()
+                .setExpiration(Date.from(reTokenValidity.toInstant()))
+                .signWith(SignatureAlgorithm.HS256, secret)
+                .compact();
+
+        return JwtToken.builder()
+                .grantType("Bearer")
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .build();
+    }
+
+    /**
+     * JWT 검증
+     * - 각각 예외에 따라 ControllerAdvice를 사용해서 처리가 가능함
+     * @param accessToken
+     * @return IsValidate
+     */
+    public boolean validateToken(String accessToken) {
+        try {
+            Jwts.parserBuilder().setSigningKey(secret).build().parseClaimsJws(accessToken);
+            return true;
+        } catch (io.jsonwebtoken.security.SecurityException | MalformedJwtException e) {
+            log.info("Invalid JWT Token", e);
+        } catch (ExpiredJwtException e) {
+            log.info("Expired JWT Token", e);
+        } catch (UnsupportedJwtException e) {
+            log.info("Unsupported JWT Token", e);
+        } catch (IllegalArgumentException e) {
+            log.info("JWT claims string is empty.", e);
+        } // try - catch
+        return false;
+    }
+
+    /**
+     * JWT Claims 추출
+     * @param accessToken
+     * @return JWT Claims
+     */
+    public Claims parseClaims(String accessToken) {
+        try {
+            return Jwts.parserBuilder()
+                    .setSigningKey(secret)
+                    .build()
+                    .parseClaimsJws(accessToken)
+                    .getBody();
+        } catch (ExpiredJwtException e) {
+            return e.getClaims();
+        }// try - catch
+    }
+
+}
+```
+
+- ### Jwt 인증 흐름
+- 로그인 요청이 들어온다.
+  - 해당 요청 Url Path는 인증을 거치지 않게 Security Config에서 설정 `web -> web.ignoring().requestMatchers(HttpMethod.POST,"/member/login")`
+  - 의존성 주입된 `AuthenticationManagerBuilder`의 `.getObject().authenticate(UsernamePasswordAuthenticationToke)` 로직 이동
+      ```java
+      @RequestMapping(value = "/member", produces = MediaType.APPLICATION_JSON_VALUE)
+      @RequiredArgsConstructor
+      @RestController
+      @Log4j2
+      public class MemberController {
+    
+        private final AuthenticationManagerBuilder authenticationManagerBuilder;
+        private final JwtUtil jwtUtil;
+    
+        @PostMapping("/login")
+        public ResponseEntity login(@RequestBody LoginDTO loginDTO){
+          log.info("------------------");
+          log.info("Login Controller 접근");
+          log.info("------------------");
+          // 1. username + password 를 기반으로 Authentication 객체 생성
+          // 이때 authentication 은 인증 여부를 확인하는 authenticated 값이 false
+          UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(loginDTO.getId()
+                  , loginDTO.getPassword());
+    
+          /** 실제 검증 후 반환하는  authentication에는 내가 커스텀한 UserDetail정보가 들어가 있음*/
+          // 2. 실제 검증. authenticate() 메서드를 통해 요청된 Member 에 대한 검증 진행
+          // authenticate 메서드가 실행될 때 CustomUserDetailsService 에서 만든 loadUserByUsername 메서드 실행
+          Authentication authentication = authenticationManagerBuilder.getObject().authenticate(authenticationToken);
+    
+          JwtToken token = jwtUtil.generateToken(authentication);
+    
+          return ResponseEntity.ok().body(token);
+        }
+    
+      }
+      ```
+- 작성했던 `UserDetailServer`의 `loadUserByUsername(String username)` 메서드를 사용하여 User 객체 생성
+- 인증이 완료되었다면 `jwtUtil`을 사용하여 토큰 생성
+
+
+## Jwt 인증 절차
+
+- 기존 Security Filter에서 순서를 변경해줘야한다.
+- `@Component`를 통해 Bean 스캔 대상임을 지정해준다.
+- `OncePerRequestFilter`를 상속한 Class에서 처리한다.
+  - 구현이 강제 되어있는 `doFilterInternal()`메서드에서 로직을 구현해준다.
+    - 내부에서 받아오는 `HttpServletRequest request`에서 Header에 포함되어있는 토큰값을 검증한다.
+  - 값에 이상이 없을 경우 ` SecurityContextHolder.getContext().setAuthentication(authentication);`를 통해 권한을 등록해준다.
 
 ## TODO List
 
 
 
-- DB 계정 관리
-  - 권한별 접근
-- 커스텀 핸들러 적용
+
+- 권한별 접근
 - jwt
   - Refresh token
+- 소셜 로그인
+  - Google
+  - Kakao
+  - Naver
