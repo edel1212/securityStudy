@@ -5,13 +5,19 @@ import io.jsonwebtoken.*;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import java.time.Instant;
 import java.time.ZonedDateTime;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Date;
 import java.util.stream.Collectors;
 
@@ -99,7 +105,7 @@ public class JwtUtil {
      * @param accessToken
      * @return JWT Claims
      */
-    public Claims parseClaims(String accessToken) {
+    private Claims parseClaims(String accessToken) {
         try {
             return Jwts.parserBuilder()
                     .setSigningKey(secret)
@@ -120,6 +126,31 @@ public class JwtUtil {
         String bearerToken = request.getHeader(AUTHORIZATION);
         if (bearerToken == null || !bearerToken.startsWith("Bearer ")) return null;
         return bearerToken.replaceAll("Bearer ","");
+    }
+
+
+    public Authentication getAuthentication(String accessToken) {
+        // 1 . 토큰에서 Claims 값을 가져온다. - 내가 넣은 값이 들어있음
+        Claims claims = this.parseClaims(accessToken);
+
+        // 2 . 주입된 토큰에서 내가 넣은 값의 유무를 체크
+        if(claims.get("memberId") == null || claims.get("auth") == null) {
+            // 예외 발생 시켜 처리하자
+            throw new RuntimeException();
+        }// if
+
+        // 3 . claims에서 권한 정보 추출 후 Spring Security의 권한 형식에 맞게 변환
+        //   ⭐️ jwt에 등록된 권한은 Security자체에서 주입된 값이기에 ROLE_가 prefix로 붙어있다!
+        Collection<? extends GrantedAuthority> authorities =
+                Arrays.stream(claims.get("auth").toString().split(","))
+                        .map(SimpleGrantedAuthority::new)
+                        .collect(Collectors.toList());
+
+        // 4 . UserDetail 객체 생성
+        UserDetails principal = new User(claims.getSubject(), "", authorities);
+
+        // 반환
+        return new UsernamePasswordAuthenticationToken(principal, "", authorities);
     }
 
 }
