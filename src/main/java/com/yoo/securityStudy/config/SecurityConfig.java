@@ -1,5 +1,6 @@
 package com.yoo.securityStudy.config;
 
+import com.yoo.securityStudy.entity.enums.Roles;
 import com.yoo.securityStudy.security.filter.JwtFilter;
 import com.yoo.securityStudy.security.handler.CustomAccessDeniedHandler;
 import com.yoo.securityStudy.security.handler.CustomAuthenticationEntryPoint;
@@ -54,9 +55,20 @@ public class SecurityConfig {
         // 세션 관련 설정  -  "SessionCreationPolicy.STATELESS" 스프링시큐리티가 생성하지도않고 기존것을 사용하지도 않음
         http.sessionManagement(session-> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
-        // 👉 모든 접근 제한
+        // 👉 접근 제어
         http.authorizeHttpRequests( access ->{
-            // 어떠한 요청에도 검사 시작
+            // 👍 인증이 되지 않은자만 허용
+            access.requestMatchers("/signUp").anonymous();
+            // 👍 전체 접근 허용
+            access.requestMatchers("/all").permitAll();
+            // 👍 hasAnyRole를 사용해서 다양한 권한으로 접근 가능
+            access.requestMatchers("/user").hasAnyRole(Roles.USER.name(), Roles.MANAGER.name(),Roles.ADMIN.name());
+            access.requestMatchers("/manager").hasAnyRole(Roles.MANAGER.name(),Roles.ADMIN.name());
+            // 👍 hasRole을 사용하면 단일 권한 지정
+            access.requestMatchers("/admin").hasRole(Roles.ADMIN.name());
+
+            // ℹ️ 순서가 중요하다 최상의 경우 에러 발생
+            //     어떠한 요청에도 검사 시작 - 로그인만 된다면 누구든 접근 가능
             access.anyRequest().authenticated();
         });
 
