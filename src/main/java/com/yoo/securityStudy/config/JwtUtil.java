@@ -128,6 +128,12 @@ public class JwtUtil {
     }
 
 
+    /**
+     * 토큰 값을 통해 Authentication 객체 생성
+     *
+     * @param accessToken the access token
+     * @return the authentication
+     */
     public Authentication getAuthentication(String accessToken) {
         // 1 . 토큰에서 Claims 값을 가져온다. - 내가 넣은 값이 들어있음
         Claims claims = this.parseClaims(accessToken);
