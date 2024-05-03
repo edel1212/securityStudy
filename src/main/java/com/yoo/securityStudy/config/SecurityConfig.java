@@ -1,7 +1,7 @@
 package com.yoo.securityStudy.config;
 
+import com.yoo.securityStudy.security.filter.JwtFilter;
 import com.yoo.securityStudy.security.handler.CustomAccessDeniedHandler;
-import com.yoo.securityStudy.security.handler.CustomAuthFailureHandler;
 import com.yoo.securityStudy.security.handler.CustomAuthenticationEntryPoint;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
@@ -15,6 +15,7 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
 @RequiredArgsConstructor
@@ -26,6 +27,8 @@ public class SecurityConfig {
     private final CustomAccessDeniedHandler customAccessDeniedHandler;
     // 접근 제어 핸들러
     private final CustomAuthenticationEntryPoint customAuthenticationEntryPoint;
+    // Jwt 필터 추가
+    private  final JwtFilter jwtFilter;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
@@ -69,6 +72,9 @@ public class SecurityConfig {
                     .authenticationEntryPoint(customAuthenticationEntryPoint)
        );
 
+       // 👉 필터 순서 번경
+        http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+       
         return http.build();
     }
 
