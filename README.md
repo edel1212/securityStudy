@@ -750,6 +750,119 @@ public class JwtUtil {
   - 구현이 강제 되어있는 `doFilterInternal()`메서드에서 로직을 구현해준다.
     - 내부에서 받아오는 `HttpServletRequest request`에서 Header에 포함되어있는 토큰값을 검증한다.
   - 값에 이상이 없을 경우 ` SecurityContextHolder.getContext().setAuthentication(authentication);`를 통해 권한을 등록해준다.
+    - 이때 넘어어온 권한 목록(`authentication`)는 `ROLE_`형식의 prefix가 붙어있다.
+- 흐름
+  - `JwtUtil` 추가로직
+    - `"Bearer "`을 제거한 JWT 값 추출
+      ```java
+      @Log4j2
+      @Component
+      public class JwtUtil {
+          /**
+           * JWT 값 추출
+           * @param request
+           * @return String Jwt Token 원문 값
+           */
+          public String resolveToken(HttpServletRequest request) {
+              String bearerToken = request.getHeader(AUTHORIZATION);
+              if (bearerToken == null || !bearerToken.startsWith("Bearer ")) return null;
+              return bearerToken.replaceAll("Bearer ", "");
+          }
+      }  
+      ```
+      - 토큰 값을 통해 Authentication 객체 생성
+        - ℹ️ 권한 정보는 `ROLE_ADMIN, ROLE_USER`형식으로 prefix가 붙어있다.
+          - 로그인 시 Security 자체 메서드에서 받아왔기 때문이다.
+            ```java
+            @RequestMapping(value = "/member", produces = MediaType.APPLICATION_JSON_VALUE)
+            @RequiredArgsConstructor
+            @RestController
+            @Log4j2
+            public class MemberController {
+          
+                private final AuthenticationManagerBuilder authenticationManagerBuilder;
+                private final JwtUtil jwtUtil;
+          
+                @PostMapping("/login")
+                public ResponseEntity login(@RequestBody LoginDTO loginDTO){
+                    log.info("------------------");
+                    log.info("Login Controller 접근");
+                    log.info("------------------");
+                    // 1. username + password 를 기반으로 Authentication 객체 생성
+                    // 이때 authentication 은 인증 여부를 확인하는 authenticated 값이 false
+                    UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(loginDTO.getId()
+                            , loginDTO.getPassword());
+          
+                    /** 실제 검증 후 반환하는  authentication에는 내가 커스텀한 UserDetail정보가 들어가 있음*/
+                    // 2. 실제 검증. authenticate() 메서드를 통해 요청된 Member 에 대한 검증 진행
+                    // authenticate 메서드가 실행될 때 CustomUserDetailsService 에서 만든 loadUserByUsername 메서드 실행
+                    Authentication authentication = authenticationManagerBuilder.getObject().authenticate(authenticationToken);
+          
+                    JwtToken token = jwtUtil.generateToken(authentication);
+          
+                   return ResponseEntity.ok().body(token);
+                }
+          
+            }
+            ```
+          - `Authentication` 객체 생성
+            ```java
+            @Log4j2
+            @Component
+            public class JwtUtil {
+                /**
+               * 토큰 값을 통해 Authentication 객체 생성
+               *
+               * @param accessToken the access token
+               * @return the authentication
+               */
+              public Authentication getAuthentication(String accessToken) {
+                  // 1 . 토큰에서 Claims 값을 가져온다. - 내가 넣은 값이 들어있음
+                  Claims claims = this.parseClaims(accessToken);
+
+                  // 2 . 주입된 토큰에서 내가 넣은 값의 유무를 체크
+                  if(claims.get("memberId") == null || claims.get("auth") == null) {
+                      // 예외 발생 시켜 처리하자
+                      throw new RuntimeException();
+                  }// if
+
+                  // 3 . claims에서 권한 정보 추출 후 Spring Security의 권한 형식에 맞게 변환
+                  //   ⭐️ jwt에 등록된 권한은 Security자체에서 주입된 값이기에 ROLE_가 prefix로 붙어있다!
+                  //      ex) ROLE_ADMIN, ROLE_USER
+                  Collection<? extends GrantedAuthority> authorities =
+                          Arrays.stream(claims.get("auth").toString().split(","))
+                                  .map(SimpleGrantedAuthority::new)
+                                  .collect(Collectors.toList());
+                  // 계정ID
+                  String username = claims.get("memberId").toString();
+
+                  // 4 . UserDetail 객체 생성
+                  UserDetails principal = new User(username, "", authorities);
+
+                  // UsernamePasswordAuthenticationToken로 반환 - uerDetail 정보와 권한 추가
+                  return new UsernamePasswordAuthenticationToken(principal, "", authorities);
+              }
+            }  
+            ```
+  - `OncePerRequestFilter`을 상속한 Class
+    - 한 요청에 대해 한번만 실행하는 필터이다. 포워딩이 발생하면 필터 체인이 다시 동작되는데, 인증은 여러번 처리가 불필요하기에 한번만 처리를 할 수 있도록 도와주는 역할을 한다.
+    - 의존성 주입 후 `http.addFilterBefore()`메서드를 통해 `UsernamePasswordAuthenticationFilter` 필터 실행 전에 실행하도록 변경
+      ```java
+      @Configuration
+      @RequiredArgsConstructor
+      @Log4j2
+      public class SecurityConfig {
+            // Jwt 필터 추가
+          private  final JwtFilter jwtFilter;
+          @Bean
+          public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
+             // 👉 필터 순서 번경
+              http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+              return http.build();
+          }
+      }
+      ```
+
 
 ## TODO List
 
