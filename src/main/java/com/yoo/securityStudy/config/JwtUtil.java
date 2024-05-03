@@ -12,7 +12,6 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 
 import java.time.Instant;
 import java.time.ZonedDateTime;
@@ -141,13 +140,16 @@ public class JwtUtil {
 
         // 3 . claims에서 권한 정보 추출 후 Spring Security의 권한 형식에 맞게 변환
         //   ⭐️ jwt에 등록된 권한은 Security자체에서 주입된 값이기에 ROLE_가 prefix로 붙어있다!
+        //      ex) ROLE_ADMIN, ROLE_USER
         Collection<? extends GrantedAuthority> authorities =
                 Arrays.stream(claims.get("auth").toString().split(","))
                         .map(SimpleGrantedAuthority::new)
                         .collect(Collectors.toList());
+        // 계정ID
+        String username = claims.get("memberId").toString();
 
         // 4 . UserDetail 객체 생성
-        UserDetails principal = new User(claims.getSubject(), "", authorities);
+        UserDetails principal = new User(username, "", authorities);
 
         // 반환
         return new UsernamePasswordAuthenticationToken(principal, "", authorities);
