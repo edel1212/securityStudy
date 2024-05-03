@@ -151,7 +151,7 @@ public class JwtUtil {
         // 4 . UserDetail 객체 생성
         UserDetails principal = new User(username, "", authorities);
 
-        // 반환
+        // UsernamePasswordAuthenticationToken로 반환 - uerDetail 정보와 권한 추가
         return new UsernamePasswordAuthenticationToken(principal, "", authorities);
     }
 
