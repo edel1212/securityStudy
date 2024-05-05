@@ -25,11 +25,11 @@ class MemberServiceImplTest {
     private PasswordEncoder passwordEncoder;
 
     @Test
-    @DisplayName("회원 저장 - usding password encoder")
+    @DisplayName("회원 저장 - using password encoder")
     void registerMember_PASSWORD_ENCODER() {
-        String id = "yoo40";
+        String id = "admin";
         String password = "123";
-        Set<Roles> rolesSet = Set.of(Roles.ADMIN, Roles.USER);
+        Set<Roles> rolesSet = Set.of(Roles.ADMIN, Roles.MANAGER, Roles.USER);
         String name = "흑곰";
         SignUpReq signUpReq = SignUpReq.builder()
                 .id(id)

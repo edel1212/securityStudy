@@ -10,6 +10,7 @@ import org.springframework.boot.autoconfigure.security.servlet.PathRequest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -20,6 +21,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 @Configuration
 @RequiredArgsConstructor
+@EnableMethodSecurity
 @Log4j2
 public class SecurityConfig {
     // DB를 사용한 로그인을 위한 Service
@@ -65,7 +67,7 @@ public class SecurityConfig {
             access.requestMatchers("/user").hasAnyRole(Roles.USER.name(), Roles.MANAGER.name(),Roles.ADMIN.name());
             access.requestMatchers("/manager").hasAnyRole(Roles.MANAGER.name(),Roles.ADMIN.name());
             // 👍 hasRole을 사용하면 단일 권한 지정
-            access.requestMatchers("/admin").hasRole(Roles.ADMIN.name());
+            // access.requestMatchers("/admin").hasRole(Roles.ADMIN.name());
             // ℹ️ 순서가 중요하다 최상의 경우 에러 발생
             //     어떠한 요청에도 검사 시작 - 로그인만 된다면 누구든 접근 가능
             access.anyRequest().authenticated();
