@@ -18,6 +18,16 @@ spring:
         format_sql: 'true'
     show-sql: 'true'
 
+############################
+## Redis Setting
+# docker Set
+# docker run -d --name security-redies-db -p 6379:6379 redis --requirepass "123"
+############################
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: 123
 
 ############################
 ##Setting Security Log Level
