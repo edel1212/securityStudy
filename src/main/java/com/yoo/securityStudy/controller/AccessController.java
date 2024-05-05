@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AccessController {
 
     @GetMapping("/all")
+    @PreAuthorize("permitAll()")  // 👍 권한이 있는 모두가 접근 가능
     public ResponseEntity allAccess(){
         return ResponseEntity.ok("All - Member Access!!");
     }
@@ -25,7 +26,7 @@ public class AccessController {
 
     @GetMapping("/manager")
     // 👍 다양한 조건문을 사용 가능하다.
-    // @PostAuthorize("isAuthenticated() and (( returnObject.name == principal.name ) or hasRole('ROLE_ADMIN'))")
+    // @PreAuthorize("isAuthenticated() and (( returnObject.name == principal.name ) or hasRole('ROLE_ADMIN'))")
     @PreAuthorize("hasRole('ROLE_MANAGER')")
     public ResponseEntity managerAccess(Authentication authentication){
         log.info("-----------------------------");
