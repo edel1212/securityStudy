@@ -863,6 +863,43 @@ public class JwtUtil {
       }
       ```
 
+## 권한별 접근제어
+- Security 내부 권한 확인 시 `"ROLE_"`로 앞에 prefix가 붙는다.
+- Jwt와 같은 Spring Security 내부에서 Session을 사용하지 않을 경우 권한 정보를 `Security Context` 내부에 따로 주입이 필요하다.
+- 접근 제어를 지정해 줄 경우 순서가 중요하다.
+  - `anyRequest().authenticated();`의 경우 모든 요청이 권한 체크가 필요하다인데 가장 위에 적용할 경우 컴파일 에러 발생
+- 접근 제어 설정
+  - `authorizeHttpRequests()` 사용 방법
+    - 직관적으로 URL 및 HttpMethod를 지정할 수 있다.
+    - URL PATH가 바뀔 경우 번거롭게 한번 더 수정이 필요하다.
+    - 제어해야할 Path가 많아질 경우 관리가 힘들어진다.
+    - 설정 코드
+      ```java
+      @Configuration
+      @RequiredArgsConstructor
+      @Log4j2
+      public class SecurityConfig {
+          @Bean
+          public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
+              // 👉 접근 제어
+              http.authorizeHttpRequests( access ->{
+                  // 👍 인증이 되지 않은자만 허용
+                  access.requestMatchers("/signUp").anonymous();
+                  // 👍 전체 접근 허용
+                  access.requestMatchers("/all").permitAll();
+                  // 👍 hasAnyRole를 사용해서 다양한 권한으로 접근 가능
+                  access.requestMatchers("/user").hasAnyRole(Roles.USER.name(), Roles.MANAGER.name(),Roles.ADMIN.name());
+                  access.requestMatchers("/manager").hasAnyRole(Roles.MANAGER.name(),Roles.ADMIN.name());
+                  // 👍 hasRole을 사용하면 단일 권한 지정
+                  access.requestMatchers("/admin").hasRole(Roles.ADMIN.name());
+                  // ℹ️ 순서가 중요하다 최상의 경우 에러 발생
+                  //     어떠한 요청에도 검사 시작 - 로그인만 된다면 누구든 접근 가능
+                  access.anyRequest().authenticated();
+              });
+              return http.build();
+          }
+      }
+      ```
 
 ## TODO List
 
