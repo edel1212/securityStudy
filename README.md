@@ -917,53 +917,58 @@ public class JwtUtil {
     | isAuthenticated()    | 현재 사용자가 익명이 아니고 (로그인 상태인 경우) true                                         |
     | isFullyAuthenticated() | 현재 사용자가 익명이 아니고 RememberMe 사용자가 아닌 경우 true                                 |
   - 예시
-
-```java
-@RestController
-public class AccessController {
-
-  @GetMapping("/all")
-  @PreAuthorize("permitAll()")  // 👍 권한이 있는 모두가 접근 가능
-  public ResponseEntity allAccess(){
-    return ResponseEntity.ok("All - Member Access!!");
+  ```java
+  @RestController
+  public class AccessController {
+  
+    @GetMapping("/all")
+    @PreAuthorize("permitAll()")  // 👍 권한이 있는 모두가 접근 가능
+    public ResponseEntity allAccess(){
+      return ResponseEntity.ok("All - Member Access!!");
+    }
+  
+    @GetMapping("/user")
+    public ResponseEntity userAccess(){
+      return ResponseEntity.ok("User Access!!");
+    }
+  
+    @GetMapping("/manager")
+    // 👍 다양한 조건문을 사용 가능하다.
+    // @PreAuthorize("isAuthenticated() and (( returnObject.name == principal.name ) or hasRole('ROLE_ADMIN'))")
+    @PreAuthorize("hasRole('ROLE_MANAGER')")
+    public ResponseEntity managerAccess(Authentication authentication){
+      log.info("-----------------------------");
+      authentication.getAuthorities().stream().forEach(log::info);
+      log.info("-----------------------------");
+      return ResponseEntity.ok("manager Access!!");
+    }
+  
+    @GetMapping("/admin")
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN')")
+    public ResponseEntity adminAccess(Authentication authentication){
+      log.info("-----------------------------");
+      authentication.getAuthorities().stream().forEach(log::info);
+      log.info("-----------------------------");
+      return ResponseEntity.ok("admin Access!!");
+    }
   }
-
-  @GetMapping("/user")
-  public ResponseEntity userAccess(){
-    return ResponseEntity.ok("User Access!!");
-  }
-
-  @GetMapping("/manager")
-  // 👍 다양한 조건문을 사용 가능하다.
-  // @PreAuthorize("isAuthenticated() and (( returnObject.name == principal.name ) or hasRole('ROLE_ADMIN'))")
-  @PreAuthorize("hasRole('ROLE_MANAGER')")
-  public ResponseEntity managerAccess(Authentication authentication){
-    log.info("-----------------------------");
-    authentication.getAuthorities().stream().forEach(log::info);
-    log.info("-----------------------------");
-    return ResponseEntity.ok("manager Access!!");
-  }
-
-  @GetMapping("/admin")
-  @PreAuthorize("hasAnyRole('ROLE_ADMIN')")
-  public ResponseEntity adminAccess(Authentication authentication){
-    log.info("-----------------------------");
-    authentication.getAuthorities().stream().forEach(log::info);
-    log.info("-----------------------------");
-    return ResponseEntity.ok("admin Access!!");
-  }
-}
-```
-
-
+  ```
+## Refresh Token
+- 사용자의 Access Token이 만료된 요청인 경우 새로운 Access Token을 발급해주는 토큰이다.
+- 흐름
+  - 1 . Client : 로그인
+  - 2 . Server : 유효한 자격 증명을 검사 후 `Access Token`과 `Refresh Token` 발급
+    - Refresh Token 생성 과 동시에 DB에 저장 ( `Access Token`의 유효 시간이 짧음으로 자주 접근이 예상 `Redis`를 추천 ) 
+  - 3 . Client : 모든 요청에 `Access Token`을 Header에 담아 전달
+  - 4 . Server : 해당 `Access Token`의 기간이 만료 되었을 경우 인증 오류 반환
+  - 5 . Client : 지정된 인증 오류를 받을 경우 Client 측에서는 보유 하고있던 `Refesh Token`을 사용해서 새로운 토큰 요청
+  - 6 . Server : 해당 `Refresh Token`의 만료 여부 확인
+    - ℹ️ (만료 경우) : 두개의 토큰 모두 만료일 경우 지정된 인증 오류 반환
+    - ℹ️ ( 인증 완료 경우 ) : 새로운 `Access Token` 발급 
+  - 7 . Client : **2번** 부터 다시 **반복**
 ## TODO List
 
 
-
-
-
-
-- 권한별 접근
 - jwt
   - Refresh token
 - 소셜 로그인
