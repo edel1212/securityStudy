@@ -900,8 +900,65 @@ public class JwtUtil {
           }
       }
       ```
+- `@EnableMethodSecurity`를 사용한 방식
+  - Method 상단 권한 체크 메서드를 통해서 접근을 제어할 수 있다.
+  - `@PreAuthorize` 내에서 사용가능한 함수/기능들
+  
+    | 함수/기능             | 설명                                                                                         |
+    |----------------------|----------------------------------------------------------------------------------------------|
+    | hasRole([role])      | 현재 사용자의 권한이 파라미터의 권한과 동일한 경우 true                                      |
+    | hasAnyRole([role1, role2, ...]) | 현재 사용자의 권한이 파라미터의 권한 중 하나와 일치하는 경우 true                           |
+    | principal            | 사용자를 증명하는 주요 객체(User)에 직접 접근 가능                                           |
+    | authentication       | SecurityContext에 있는 authentication 객체에 접근 가능                                      |
+    | permitAll            | 모든 접근을 허용                                                                            |
+    | denyAll              | 모든 접근을 거부                                                                            |
+    | isAnonymous()        | 현재 사용자가 익명(비로그인) 상태인 경우 true                                                |
+    | isRememberMe()       | 현재 사용자가 RememberMe 사용자인 경우 true                                                  |
+    | isAuthenticated()    | 현재 사용자가 익명이 아니고 (로그인 상태인 경우) true                                         |
+    | isFullyAuthenticated() | 현재 사용자가 익명이 아니고 RememberMe 사용자가 아닌 경우 true                                 |
+  - 예시
+
+```java
+@RestController
+public class AccessController {
+
+  @GetMapping("/all")
+  @PreAuthorize("permitAll()")  // 👍 권한이 있는 모두가 접근 가능
+  public ResponseEntity allAccess(){
+    return ResponseEntity.ok("All - Member Access!!");
+  }
+
+  @GetMapping("/user")
+  public ResponseEntity userAccess(){
+    return ResponseEntity.ok("User Access!!");
+  }
+
+  @GetMapping("/manager")
+  // 👍 다양한 조건문을 사용 가능하다.
+  // @PreAuthorize("isAuthenticated() and (( returnObject.name == principal.name ) or hasRole('ROLE_ADMIN'))")
+  @PreAuthorize("hasRole('ROLE_MANAGER')")
+  public ResponseEntity managerAccess(Authentication authentication){
+    log.info("-----------------------------");
+    authentication.getAuthorities().stream().forEach(log::info);
+    log.info("-----------------------------");
+    return ResponseEntity.ok("manager Access!!");
+  }
+
+  @GetMapping("/admin")
+  @PreAuthorize("hasAnyRole('ROLE_ADMIN')")
+  public ResponseEntity adminAccess(Authentication authentication){
+    log.info("-----------------------------");
+    authentication.getAuthorities().stream().forEach(log::info);
+    log.info("-----------------------------");
+    return ResponseEntity.ok("admin Access!!");
+  }
+}
+```
+
 
 ## TODO List
+
+
 
 
 
