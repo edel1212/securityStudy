@@ -96,6 +96,7 @@ public class SecurityConfig {
         return web -> web.ignoring()
                 // 로그인 접근은 누구나 허용
                 .requestMatchers(HttpMethod.POST,"/member/login")
+                .requestMatchers(HttpMethod.POST, "member/new-token")
                 // Spring Boot의 resources/static 경로의 정적 파일들 접근 허용
                 .requestMatchers(PathRequest.toStaticResources().atCommonLocations());
     }
