@@ -16,19 +16,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class AccessController {
 
-    private final RedisTemplate<String, String> redisTemplate;
 
     @GetMapping("/all")
     @PreAuthorize("permitAll()")  // 👍 권한이 있는 모두가 접근 가능
     public ResponseEntity allAccess(){
-        redisTemplate.opsForValue().set("yoo","123",100L);
         return ResponseEntity.ok("All - Member Access!!");
-    }
-
-    @GetMapping("/check")
-    @PreAuthorize("permitAll()")
-    public ResponseEntity checkRedis(){
-        return ResponseEntity.ok(redisTemplate.opsForValue().get("yoo"));
     }
 
     @GetMapping("/user")
