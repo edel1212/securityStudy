@@ -863,13 +863,112 @@ public class JwtUtil {
       }
       ```
 
-
+## 권한별 접근제어
+- Security 내부 권한 확인 시 `"ROLE_"`로 앞에 prefix가 붙는다.
+- Jwt와 같은 Spring Security 내부에서 Session을 사용하지 않을 경우 권한 정보를 `Security Context` 내부에 따로 주입이 필요하다.
+- 접근 제어를 지정해 줄 경우 순서가 중요하다.
+  - `anyRequest().authenticated();`의 경우 모든 요청이 권한 체크가 필요하다인데 가장 위에 적용할 경우 컴파일 에러 발생
+- 접근 제어 설정
+  - `authorizeHttpRequests()` 사용 방법
+    - 직관적으로 URL 및 HttpMethod를 지정할 수 있다.
+    - URL PATH가 바뀔 경우 번거롭게 한번 더 수정이 필요하다.
+    - 제어해야할 Path가 많아질 경우 관리가 힘들어진다.
+    - 설정 코드
+      ```java
+      @Configuration
+      @RequiredArgsConstructor
+      @Log4j2
+      public class SecurityConfig {
+          @Bean
+          public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
+              // 👉 접근 제어
+              http.authorizeHttpRequests( access ->{
+                  // 👍 인증이 되지 않은자만 허용
+                  access.requestMatchers("/signUp").anonymous();
+                  // 👍 전체 접근 허용
+                  access.requestMatchers("/all").permitAll();
+                  // 👍 hasAnyRole를 사용해서 다양한 권한으로 접근 가능
+                  access.requestMatchers("/user").hasAnyRole(Roles.USER.name(), Roles.MANAGER.name(),Roles.ADMIN.name());
+                  access.requestMatchers("/manager").hasAnyRole(Roles.MANAGER.name(),Roles.ADMIN.name());
+                  // 👍 hasRole을 사용하면 단일 권한 지정
+                  access.requestMatchers("/admin").hasRole(Roles.ADMIN.name());
+                  // ℹ️ 순서가 중요하다 최상의 경우 에러 발생
+                  //     어떠한 요청에도 검사 시작 - 로그인만 된다면 누구든 접근 가능
+                  access.anyRequest().authenticated();
+              });
+              return http.build();
+          }
+      }
+      ```
+- `@EnableMethodSecurity`를 사용한 방식
+  - Method 상단 권한 체크 메서드를 통해서 접근을 제어할 수 있다.
+  - `@PreAuthorize` 내에서 사용가능한 함수/기능들
+  
+    | 함수/기능             | 설명                                                                                         |
+    |----------------------|----------------------------------------------------------------------------------------------|
+    | hasRole([role])      | 현재 사용자의 권한이 파라미터의 권한과 동일한 경우 true                                      |
+    | hasAnyRole([role1, role2, ...]) | 현재 사용자의 권한이 파라미터의 권한 중 하나와 일치하는 경우 true                           |
+    | principal            | 사용자를 증명하는 주요 객체(User)에 직접 접근 가능                                           |
+    | authentication       | SecurityContext에 있는 authentication 객체에 접근 가능                                      |
+    | permitAll            | 모든 접근을 허용                                                                            |
+    | denyAll              | 모든 접근을 거부                                                                            |
+    | isAnonymous()        | 현재 사용자가 익명(비로그인) 상태인 경우 true                                                |
+    | isRememberMe()       | 현재 사용자가 RememberMe 사용자인 경우 true                                                  |
+    | isAuthenticated()    | 현재 사용자가 익명이 아니고 (로그인 상태인 경우) true                                         |
+    | isFullyAuthenticated() | 현재 사용자가 익명이 아니고 RememberMe 사용자가 아닌 경우 true                                 |
+  - 예시
+  ```java
+  @RestController
+  public class AccessController {
+  
+    @GetMapping("/all")
+    @PreAuthorize("permitAll()")  // 👍 권한이 있는 모두가 접근 가능
+    public ResponseEntity allAccess(){
+      return ResponseEntity.ok("All - Member Access!!");
+    }
+  
+    @GetMapping("/user")
+    public ResponseEntity userAccess(){
+      return ResponseEntity.ok("User Access!!");
+    }
+  
+    @GetMapping("/manager")
+    // 👍 다양한 조건문을 사용 가능하다.
+    // @PreAuthorize("isAuthenticated() and (( returnObject.name == principal.name ) or hasRole('ROLE_ADMIN'))")
+    @PreAuthorize("hasRole('ROLE_MANAGER')")
+    public ResponseEntity managerAccess(Authentication authentication){
+      log.info("-----------------------------");
+      authentication.getAuthorities().stream().forEach(log::info);
+      log.info("-----------------------------");
+      return ResponseEntity.ok("manager Access!!");
+    }
+  
+    @GetMapping("/admin")
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN')")
+    public ResponseEntity adminAccess(Authentication authentication){
+      log.info("-----------------------------");
+      authentication.getAuthorities().stream().forEach(log::info);
+      log.info("-----------------------------");
+      return ResponseEntity.ok("admin Access!!");
+    }
+  }
+  ```
+## Refresh Token
+- 사용자의 Access Token이 만료된 요청인 경우 새로운 Access Token을 발급해주는 토큰이다.
+- 흐름
+  - 1 . Client : 로그인
+  - 2 . Server : 유효한 자격 증명을 검사 후 `Access Token`과 `Refresh Token` 발급
+    - Refresh Token 생성 과 동시에 DB에 저장 ( `Access Token`의 유효 시간이 짧음으로 자주 접근이 예상 `Redis`를 추천 ) 
+  - 3 . Client : 모든 요청에 `Access Token`을 Header에 담아 전달
+  - 4 . Server : 해당 `Access Token`의 기간이 만료 되었을 경우 인증 오류 반환
+  - 5 . Client : 지정된 인증 오류를 받을 경우 Client 측에서는 보유 하고있던 `Refesh Token`을 사용해서 새로운 토큰 요청
+  - 6 . Server : 해당 `Refresh Token`의 만료 여부 확인
+    - ℹ️ (만료 경우) : 두개의 토큰 모두 만료일 경우 지정된 인증 오류 반환
+    - ℹ️ ( 인증 완료 경우 ) : 새로운 `Access Token` 발급 
+  - 7 . Client : **2번** 부터 다시 **반복**
 ## TODO List
 
 
-
-
-- 권한별 접근
 - jwt
   - Refresh token
 - 소셜 로그인
