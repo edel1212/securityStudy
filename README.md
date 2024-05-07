@@ -966,11 +966,20 @@ public class JwtUtil {
     - ℹ️ (만료 경우) : 두개의 토큰 모두 만료일 경우 지정된 인증 오류 반환
     - ℹ️ ( 인증 완료 경우 ) : 새로운 `Access Token` 발급 
   - 7 . Client : **2번** 부터 다시 **반복**
+
+- ### Redis 적용
+  - Dependencies 적용
+    ```groovy
+    dependencies {
+        // Redis
+        implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    
+    }
+    ```
+
 ## TODO List
 
 
-- jwt
-  - Refresh token
 - 소셜 로그인
   - Google
   - Kakao
