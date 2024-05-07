@@ -1,0 +1,12 @@
+spring:
+  security:
+    oauth2:
+      client:
+        registration:
+          # 구글 로그인 추가
+          google:
+            client-id: [Client ID]
+            client-secret: [Client Secret]
+            scope:
+              - email
+              - profile

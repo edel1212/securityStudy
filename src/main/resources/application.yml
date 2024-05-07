@@ -1,12 +1,19 @@
-######################
-# datasource setting #
-######################
 spring:
+  ############################
+  ## Oauth2 Setting include
+  ############################
+  profiles:
+    include: oauth
+
+  ######################
+  # datasource setting #
+  ######################
   datasource:
     driver-class-name: org.mariadb.jdbc.Driver
     username: root
     url: jdbc:mariadb://localhost:3333/sec
     password: 123
+    
   ######################
   # JPA setting #
   ######################
