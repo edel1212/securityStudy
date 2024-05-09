@@ -11,6 +11,11 @@ import org.springframework.data.redis.repository.configuration.EnableRedisReposi
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 @Configuration
+/**
+ * ℹ️ 필수 설정
+ * - Redis 데이터베이스와 상호 작용할 수 있는 구현체를 생성합니다.
+ * - Redis 리포지토리를 활성화하면, Spring IoC 컨테이너가 관련된 빈을 생성하고 관리합니다.
+ */
 @EnableRedisRepositories
 public class RedisConfig {
     @Value("${spring.data.redis.host}")
