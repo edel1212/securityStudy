@@ -1037,7 +1037,22 @@ public class JwtUtil {
         }
     }
     ```
-
+  - 흐름 (서버 관점)
+    - 로그인 요청이 들어옴
+      - 인증 로직 성공
+      - `Access Token` 및 `Refresh Token` 발급
+      - `Refresh Token` Redis에 저장 ( 유효시간을 Reids 데이터 유지 시간과 같게 저장하자 )
+        - Key 값은 계정ID로 지정
+    - 새로운 토큰 발급 요청이 들어옴
+      - `Access Token` 과 `Refresh Token`을 Parameter로 받음
+        - `Access Token`울 받는 이유는 해당 Token 내부의 계정 정보를 활용 하기 위함
+          - Parameter로 계정 정보를 받는거 자체가 안전성 측면에서 떨어진다 판단
+      - `Refresh Token`의 만료 기간 확인
+      - `Refresh Token`의 Redis에 저장 유무 및 같은 값인지 확인 ( 교차 검증을 통해 안정성 향상 )
+      - 이상이 없을 경우 `Access Token`를 활용해서 새로운 `Access Token` 와 `Refresh Token` 발급
+      - `Refresh Token` Redis에 저장 ( 유효시간을 Reids 데이터 유지 시간과 같게 저장하자 )
+        - Key 값은 계정ID로 지정
+  
 ## TODO List
 
 
