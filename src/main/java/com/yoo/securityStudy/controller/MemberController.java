@@ -67,13 +67,19 @@ public class MemberController {
         if(!validationCheck) return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("잘못된 토큰입니다");
         // 이전 토큰에서 Claims 값 추출
         Claims oldClaims =  jwtUtil.parseClaims(newTokenReq.getOldAccessToken());
-        // 계정 정보 추출
+        // 계정Id 추출
         String memberId = oldClaims.get("memberId").toString();
-        // Redis 내부에서 저장된 Refresh Token 추출
+        // ℹ️ Redis 내부에서 저장된 Refresh Token 추출 - 계정 정보로 저장된 Refresh Token 추출
         String refreshToken = redisTemplate.opsForValue().get(memberId);
         // 값이 같은지 확인 후 예외 처리
-        if(!newTokenReq.getRefreshToken().equals(refreshToken)) return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("재로그인 필요");
-        // 새로 토큰생성 해주지
-        return ResponseEntity.ok(jwtUtil.generateNewToken(oldClaims));
+        if(!newTokenReq.getRefreshToken().equals(refreshToken))
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("재로그인 필요");
+        // ℹ️ 만료된 Access Token의 계정정보를 사용해서 새로 토큰생성
+        JwtToken newJwtToken = jwtUtil.generateNewToken(oldClaims);
+        // ℹ️ Redies에 Refresh Token 정보 업데이트
+        ValueOperations<String, String> valueOperations = redisTemplate.opsForValue();
+        valueOperations.set( memberId, newJwtToken.getRefreshToken(), 300L, TimeUnit.SECONDS);
+
+        return ResponseEntity.ok(newJwtToken);
     }
 }
