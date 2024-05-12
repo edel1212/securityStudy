@@ -1052,7 +1052,64 @@ public class JwtUtil {
       - 이상이 없을 경우 `Access Token`를 활용해서 새로운 `Access Token` 와 `Refresh Token` 발급
       - `Refresh Token` Redis에 저장 ( 유효시간을 Reids 데이터 유지 시간과 같게 저장하자 )
         - Key 값은 계정ID로 지정
-  
+  - 사용 코드
+    - 로그인
+      ```java
+      public class MemberController {
+        // Spring Security Manager
+        private final AuthenticationManagerBuilder authenticationManagerBuilder;
+        // Jwt Util
+        private final JwtUtil jwtUtil;
+        // ℹ️ Redis 의존성 주입
+        private final RedisTemplate<String, String> redisTemplate;
+        
+        @PostMapping("/login")
+        public ResponseEntity login(@RequestBody LoginDTO loginDTO){
+          UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(loginDTO.getId()
+                  , loginDTO.getPassword());
+          Authentication authentication = authenticationManagerBuilder.getObject().authenticate(authenticationToken);
+          JwtToken token = jwtUtil.generateToken(authentication);
+      
+          // ℹ️ Redis사용을 위한 객체 생성
+          ValueOperations<String, String> valueOperations = redisTemplate.opsForValue();
+          // ℹ️ set()함수를 사용해서 (Key, Value, 적용 시간, 시간방식) 형태로 저장 
+          valueOperations.set( authentication.getName(), token.getRefreshToken(), 300L, TimeUnit.SECONDS);
+          return ResponseEntity.ok().body(token);
+        }
+      }
+      ```
+    - 신규 토큰 발급
+      ```java
+      public class MemberController {
+          // Jwt Util
+          private final JwtUtil jwtUtil;
+          // ℹ️ Redis 의존성 주입
+          private final RedisTemplate<String, String> redisTemplate;
+      
+          @PostMapping("/new-token")
+          public ResponseEntity newToken(@RequestBody NewTokenReq newTokenReq){
+            boolean validationCheck = jwtUtil.validateToken(newTokenReq.getRefreshToken());
+            if(!validationCheck) return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("잘못된 토큰입니다");
+            // 이전 토큰에서 Claims 값 추출
+            Claims oldClaims =  jwtUtil.parseClaims(newTokenReq.getOldAccessToken());
+            // 계정Id 추출
+            String memberId = oldClaims.get("memberId").toString();
+            // ℹ️ Redis 내부에서 저장된 Refresh Token 추출 - 계정 정보로 저장된 Refresh Token 추출
+            String refreshToken = redisTemplate.opsForValue().get(memberId);
+            // 값이 같은지 확인 후 예외 처리
+            if(!newTokenReq.getRefreshToken().equals(refreshToken))
+              return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("재로그인 필요");
+            // ℹ️ 만료된 Access Token의 계정정보를 사용해서 새로 토큰생성
+            JwtToken newJwtToken = jwtUtil.generateNewToken(oldClaims);
+            // ℹ️ Redies에 Refresh Token 정보 업데이트
+            ValueOperations<String, String> valueOperations = redisTemplate.opsForValue();
+            valueOperations.set( memberId, newJwtToken.getRefreshToken(), 300L, TimeUnit.SECONDS);
+        
+            return ResponseEntity.ok(newJwtToken);
+          }
+      }
+      ```
+
 ## TODO List
 
 
