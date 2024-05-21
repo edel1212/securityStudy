@@ -39,22 +39,22 @@ public class SecurityConfig {
         log.info("-------------------------");
         log.info(" 1) Security Filter Chain");
         log.info("-------------------------");
-        http.oauth2Login(Customizer.withDefaults());
+
         /*************************************************/
         /** Default Setting **/
         /*************************************************/
         // 👉 CSRF 사용 ❌
-//        http.csrf(csrf -> csrf.disable());
-//        // 👉 CORS 설정
-//        http.cors(cors->{
-//            /**
-//             * 참고 : https://velog.io/@juhyeon1114/Spring-security%EC%97%90%EC%84%9C-CORS%EC%84%A4%EC%A0%95%ED%95%98%EA%B8%B0
-//             *    - 설정 클래스를 만든 후 주입해주면 Cors 설정이 한번에 가능함
-//             * */
-//            // cors.configurationSource(CorsConfigurationSource)
-//        });
-//        // 👉 Security HTTP Basic 인증 ❌ - 웹 상단 알림창으로 로그인이 뜨는 것 방지
-//        http.httpBasic(AbstractHttpConfigurer::disable);
+        http.csrf(csrf -> csrf.disable());
+        // 👉 CORS 설정
+        http.cors(cors->{
+            /**
+             * 참고 : https://velog.io/@juhyeon1114/Spring-security%EC%97%90%EC%84%9C-CORS%EC%84%A4%EC%A0%95%ED%95%98%EA%B8%B0
+             *    - 설정 클래스를 만든 후 주입해주면 Cors 설정이 한번에 가능함
+             * */
+            // cors.configurationSource(CorsConfigurationSource)
+        });
+        // 👉 Security HTTP Basic 인증 ❌ - 웹 상단 알림창으로 로그인이 뜨는 것 방지
+        http.httpBasic(AbstractHttpConfigurer::disable);
 //        // 세션 관련 설정  -  "SessionCreationPolicy.STATELESS" 스프링시큐리티가 생성하지도않고 기존것을 사용하지도 않음
 //        http.sessionManagement(session-> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
@@ -69,22 +69,24 @@ public class SecurityConfig {
             //     어떠한 요청에도 검사 시작 - 로그인만 된다면 누구든 접근 가능
             access.anyRequest().authenticated();
         });
+       // 👉 UserDetailService 지정 - 로그인 시 내가 지정한 비즈니스 로직을 사용한다.
+       http.userDetailsService(memberService);
 
-//        // 👉 UserDetailService 지정 - 로그인 시 내가 지정한 비즈니스 로직을 사용한다.
-//       http.userDetailsService(memberService);
-//
-//       // Custom Exception Handling
-//       http.exceptionHandling(handling ->
-//               handling
-//                    // ✨ Access Denied Handling
-//                    .accessDeniedHandler(customAccessDeniedHandler)
-//                     // ✨ AuthenticationEntryPoint
-//                    .authenticationEntryPoint(customAuthenticationEntryPoint)
-//       );
-//
-//       // 👉 필터 순서 번경
-//        http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
-       
+       // Custom Exception Handling
+       http.exceptionHandling(handling ->
+               handling
+                    // ✨ Access Denied Handling
+                    .accessDeniedHandler(customAccessDeniedHandler)
+                     // ✨ AuthenticationEntryPoint
+                    .authenticationEntryPoint(customAuthenticationEntryPoint)
+       );
+
+       // 👉 필터 순서 번경
+        http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+
+        // ℹ️ Google Login 가능 설정
+        http.oauth2Login(Customizer.withDefaults());
+
         return http.build();
     }
 
@@ -98,7 +100,6 @@ public class SecurityConfig {
                 // 로그인 접근은 누구나 허용
                 .requestMatchers(HttpMethod.POST,"/member/login")
                 .requestMatchers(HttpMethod.POST, "member/new-token")
-               // .requestMatchers(HttpMethod.GET, "**")
                 // Spring Boot의 resources/static 경로의 정적 파일들 접근 허용
                 .requestMatchers(PathRequest.toStaticResources().atCommonLocations());
     }
