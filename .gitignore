@@ -37,4 +37,4 @@ out/
 .vscode/
 
 # Ignore application-auth configuration file
-src/main/resources/application-oauth.yml
+application-oauth.yml
