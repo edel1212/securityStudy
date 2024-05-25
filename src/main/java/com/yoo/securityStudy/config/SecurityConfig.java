@@ -4,13 +4,13 @@ import com.yoo.securityStudy.entity.enums.Roles;
 import com.yoo.securityStudy.security.filter.JwtFilter;
 import com.yoo.securityStudy.security.handler.CustomAccessDeniedHandler;
 import com.yoo.securityStudy.security.handler.CustomAuthenticationEntryPoint;
-import com.yoo.securityStudy.service.OAuth2UserDetailsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.boot.autoconfigure.security.servlet.PathRequest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
@@ -19,8 +19,6 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-
-import static org.springframework.security.config.Customizer.withDefaults;
 
 @Configuration
 @RequiredArgsConstructor
@@ -34,9 +32,7 @@ public class SecurityConfig {
     // 접근 제어 핸들러
     private final CustomAuthenticationEntryPoint customAuthenticationEntryPoint;
     // Jwt 필터 추가
-    private final JwtFilter jwtFilter;
-    /** Social Service 등록 */
-    private final OAuth2UserDetailsService oAuth2UserDetailsService;
+    private  final JwtFilter jwtFilter;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
@@ -60,7 +56,7 @@ public class SecurityConfig {
         // 👉 Security HTTP Basic 인증 ❌ - 웹 상단 알림창으로 로그인이 뜨는 것 방지
         http.httpBasic(AbstractHttpConfigurer::disable);
         // 세션 관련 설정  -  "SessionCreationPolicy.STATELESS" 스프링시큐리티가 생성하지도않고 기존것을 사용하지도 않음
-        //http.sessionManagement(session-> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+        http.sessionManagement(session-> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
         // 👉 접근 제어
         http.authorizeHttpRequests( access ->{
@@ -73,8 +69,7 @@ public class SecurityConfig {
             //     어떠한 요청에도 검사 시작 - 로그인만 된다면 누구든 접근 가능
             access.anyRequest().authenticated();
         });
-
-        // 👉 UserDetailService 지정 - 로그인 시 내가 지정한 비즈니스 로직을 사용한다.
+       // 👉 UserDetailService 지정 - 로그인 시 내가 지정한 비즈니스 로직을 사용한다.
        http.userDetailsService(memberService);
 
        // Custom Exception Handling
@@ -86,12 +81,12 @@ public class SecurityConfig {
                     .authenticationEntryPoint(customAuthenticationEntryPoint)
        );
 
-        // 👉 Social OAuth Detail Service 등록
-       http.oauth2Login(withDefaults());
-
        // 👉 필터 순서 번경
         http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
-       
+
+        // ℹ️ Google Login 가능 설정
+        http.oauth2Login(Customizer.withDefaults());
+
         return http.build();
     }
 
@@ -104,8 +99,7 @@ public class SecurityConfig {
         return web -> web.ignoring()
                 // 로그인 접근은 누구나 허용
                 .requestMatchers(HttpMethod.POST,"/member/login")
-                .requestMatchers(HttpMethod.POST, "/member/new-token")
-                .requestMatchers(HttpMethod.GET, "/**")
+                .requestMatchers(HttpMethod.POST, "member/new-token")
                 // Spring Boot의 resources/static 경로의 정적 파일들 접근 허용
                 .requestMatchers(PathRequest.toStaticResources().atCommonLocations());
     }
