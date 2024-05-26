@@ -4,6 +4,7 @@ import com.yoo.securityStudy.entity.enums.Roles;
 import com.yoo.securityStudy.security.filter.JwtFilter;
 import com.yoo.securityStudy.security.handler.CustomAccessDeniedHandler;
 import com.yoo.securityStudy.security.handler.CustomAuthenticationEntryPoint;
+import com.yoo.securityStudy.security.handler.OAuth2SuccessHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.boot.autoconfigure.security.servlet.PathRequest;
@@ -29,8 +30,8 @@ public class SecurityConfig {
     private final UserDetailsService memberService;
     // 권한 제어 핸들러
     private final CustomAccessDeniedHandler customAccessDeniedHandler;
-    // 접근 제어 핸들러
     private final CustomAuthenticationEntryPoint customAuthenticationEntryPoint;
+    private final OAuth2SuccessHandler oAuth2SuccessHandler;
     // Jwt 필터 추가
     private  final JwtFilter jwtFilter;
 
@@ -86,6 +87,7 @@ public class SecurityConfig {
 
         // ℹ️ Google Login 가능 설정
         http.oauth2Login(Customizer.withDefaults());
+        http.oauth2Login(oauth -> oauth.successHandler(oAuth2SuccessHandler));
 
         return http.build();
     }
