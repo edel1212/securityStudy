@@ -8,7 +8,6 @@ import lombok.extern.log4j.Log4j2;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
-import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.IOException;
 
@@ -26,7 +25,5 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler {
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
         response.getWriter().write("{\"token\": \"" + "test!!" + "\"}");
-
-
     }
 }
