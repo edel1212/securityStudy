@@ -1,0 +1,12 @@
+spring:
+  # yml 구조를 잘 보자 .. spring 아래의 계층으로 security가 들어갔어야 했으나 복붙으로 인한 이슈로 삽질..
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id:
+            client-secret:
+            scope:
+              - email
+              - profile
