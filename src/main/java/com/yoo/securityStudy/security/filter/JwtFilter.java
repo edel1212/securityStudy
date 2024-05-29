@@ -24,10 +24,17 @@ public class JwtFilter extends OncePerRequestFilter {
         // 1. Request Header 에서 JWT 토큰 추출 - "Bearer " 값 제거 
         String token = jwtUtil.resolveToken(request);
         // 2. token이 없을 경우 해당 필터 스킵
+<<<<<<< HEAD
         if(token == null){
             filterChain.doFilter(request, response);
             return;
         }// if
+=======
+        if(token == null) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+>>>>>>> 6485517060287b980dfb96c27c92c712323ed00a
         // 3. Token 유효값 검사 - 이상이 있을 경우 Exception Handler 적용
         jwtUtil.validateToken(token);
 

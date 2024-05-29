@@ -63,8 +63,7 @@ public class JwtUtil {
 
         // Refresh Token 생성
         // 토큰 만료시간 생성
-        ZonedDateTime reNow = ZonedDateTime.now();
-        ZonedDateTime reTokenValidity = reNow.plusSeconds(this.accessTokenExpTime);
+        ZonedDateTime reTokenValidity = now.plusSeconds(this.accessTokenExpTime);
         String refreshToken = Jwts.builder()
                 .setExpiration(Date.from(reTokenValidity.toInstant()))
                 .signWith(SignatureAlgorithm.HS256, secret)
@@ -75,6 +74,42 @@ public class JwtUtil {
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .build();
+    }
+
+    /**
+     * JWT Token 생성
+     * - 이전에 사용하던 Claims 토대로 토큰들 재생성 
+     * @param claims
+     * @return JwtToken
+     */
+    public JwtToken generateNewToken(Claims claims){
+
+        // 토큰 만료시간 생성
+        ZonedDateTime now = ZonedDateTime.now();
+        ZonedDateTime tokenValidity = now.plusSeconds(this.accessTokenExpTime);
+
+        // Jwt AccessToken 생성
+        String accessToken =  Jwts.builder()
+                .setClaims(claims)
+                .setIssuedAt(Date.from(Instant.now()))
+                .setExpiration(Date.from(tokenValidity.toInstant()))
+                .signWith(SignatureAlgorithm.HS256, secret)
+                .compact();
+
+        // Refresh Token 생성
+        // 토큰 만료시간 생성
+        ZonedDateTime reTokenValidity = now.plusSeconds(this.accessTokenExpTime);
+        String refreshToken = Jwts.builder()
+                .setExpiration(Date.from(reTokenValidity.toInstant()))
+                .signWith(SignatureAlgorithm.HS256, secret)
+                .compact();
+
+        return JwtToken.builder()
+                .grantType("Bearer")
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .build();
+
     }
 
     /**
@@ -104,7 +139,7 @@ public class JwtUtil {
      * @param accessToken
      * @return JWT Claims
      */
-    private Claims parseClaims(String accessToken) {
+    public Claims parseClaims(String accessToken) {
         try {
             return Jwts.parserBuilder()
                     .setSigningKey(secret)
@@ -161,4 +196,13 @@ public class JwtUtil {
         return new UsernamePasswordAuthenticationToken(principal, "", authorities);
     }
 
+    /**
+     * AccessToken 내 Bearer 제거
+     *
+     * @param AccessToken the access token
+     * @return removeBearer
+     */
+    private String removeBearer(String AccessToken){
+        return AccessToken.replaceAll("Bearer ","");
+    }
 }

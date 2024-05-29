@@ -4,12 +4,14 @@ import com.yoo.securityStudy.entity.enums.Roles;
 import com.yoo.securityStudy.security.filter.JwtFilter;
 import com.yoo.securityStudy.security.handler.CustomAccessDeniedHandler;
 import com.yoo.securityStudy.security.handler.CustomAuthenticationEntryPoint;
+import com.yoo.securityStudy.security.handler.OAuth2SuccessHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.boot.autoconfigure.security.servlet.PathRequest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
@@ -28,8 +30,8 @@ public class SecurityConfig {
     private final UserDetailsService memberService;
     // 권한 제어 핸들러
     private final CustomAccessDeniedHandler customAccessDeniedHandler;
-    // 접근 제어 핸들러
     private final CustomAuthenticationEntryPoint customAuthenticationEntryPoint;
+    private final OAuth2SuccessHandler oAuth2SuccessHandler;
     // Jwt 필터 추가
     private  final JwtFilter jwtFilter;
 
@@ -68,8 +70,7 @@ public class SecurityConfig {
             //     어떠한 요청에도 검사 시작 - 로그인만 된다면 누구든 접근 가능
             access.anyRequest().authenticated();
         });
-
-        // 👉 UserDetailService 지정 - 로그인 시 내가 지정한 비즈니스 로직을 사용한다.
+       // 👉 UserDetailService 지정 - 로그인 시 내가 지정한 비즈니스 로직을 사용한다.
        http.userDetailsService(memberService);
 
        // Custom Exception Handling
@@ -83,7 +84,11 @@ public class SecurityConfig {
 
        // 👉 필터 순서 번경
         http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
-       
+
+        // ℹ️ Google Login 가능 설정
+        http.oauth2Login(Customizer.withDefaults());
+        http.oauth2Login(oauth -> oauth.successHandler(oAuth2SuccessHandler));
+
         return http.build();
     }
 
@@ -96,7 +101,9 @@ public class SecurityConfig {
         return web -> web.ignoring()
                 // 로그인 접근은 누구나 허용
                 .requestMatchers(HttpMethod.POST,"/member/login")
+                .requestMatchers(HttpMethod.POST, "/member/new-token")
                 // Spring Boot의 resources/static 경로의 정적 파일들 접근 허용
+                .requestMatchers(HttpMethod.GET, "/static/**")
                 .requestMatchers(PathRequest.toStaticResources().atCommonLocations());
     }
 
