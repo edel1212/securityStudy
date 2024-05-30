@@ -16,9 +16,12 @@ public class OAuthService {
     private final GoogleOauth googleOauth;
     private final HttpServletResponse response;
 
-    public void request(Constant.SocialLoginType socialLoginType) throws IOException {
+    public void request(String type) throws IOException {
+        // 👉 Redirection 시킬 URL
         String redirectURL;
-        switch (socialLoginType){
+        // 👉 Social enum 변환
+        SocialType socialType = SocialType.valueOf(type.toUpperCase());
+        switch (socialType){
             case GOOGLE:
                 //각 소셜 로그인을 요청하면 소셜로그인 페이지로 리다이렉트 해주는 프로세스이다.
                 redirectURL= googleOauth.getOauthRedirectURL();
@@ -29,8 +32,10 @@ public class OAuthService {
         response.sendRedirect(redirectURL);
     }
 
-    public GetSocialOAuthRes oAuthLogin(Constant.SocialLoginType socialLoginType, String code) throws IOException {
-        switch (socialLoginType) {
+    public GetSocialOAuthRes oAuthLogin(String type, String code) throws IOException {
+        // 👉 Social enum 변환
+        SocialType socialType = SocialType.valueOf(type.toUpperCase());
+        switch (socialType) {
             case GOOGLE:
                 //구글로 일회성 코드를 보내 액세스 토큰이 담긴 응답객체를 받아옴
                 ResponseEntity<String> accessTokenResponse = googleOauth.requestAccessToken(code);
