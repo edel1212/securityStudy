@@ -10,3 +10,13 @@ spring:
             scope:
               - email
               - profile
+
+  OAuth2:
+    google:
+      url: https://accounts.google.com/o/oauth2/v2/auth
+      client-id:
+      client-secret:
+      # Google에 지정한 Redirect 주소를 기입
+      callback-url: http://localhost:8080/app/accounts/auth/google/callback
+      # scope는 아래처럼 공백으로 되어 URL 에서 `%20`로 붙어서 처리된다.
+      scope: https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile
