@@ -1169,7 +1169,7 @@ public class JwtUtil {
       }
       ```
 
-## 소셜 로그인 (Google)
+## 소셜 로그인 (Google) - 기본 설정 대로 사용
 
 ### dependencies 적용
 
@@ -1202,6 +1202,8 @@ spring:
 
 - `oauth2Login()`적용을 해주지 않으면 접근이 불가능하다.
   - `{{도메인}}/oauth2/authorization/google`으로 접근하면 자동으로 Google 로그인 연결 페이지로 이동 된다.
+  - 승인된 리디렉션으로 `{{도메인}}/login/oauth2/code/google`을 추가해 주자!
+    - 기본 설정 그대로 사용하면 해당 Path 정보로 이동하기 떄문이다.
 
 ```java
 @Configuration
@@ -1312,3 +1314,17 @@ public class SecurityConfig {
     }
 }
 ```
+
+## 소셜 로그인 (Google) - API 방식 사용
+
+- Token을 사용하여 처리할 경우 일반적인 OAuth 로그인 방식으로는 사용이 불가능하기에 API 방식으로 사용한다.
+- 흐름
+  - [Client] 지정 URL로 소셜 요청
+  - [Server] 서버에 저장된 `scope`,`client_id`,`redirect_uri`를 통해 URI를 만들어 서드파티(Google)로 `sendRedirect()` 시킴
+    - 해당 리디렉션 URI는 Google에 등록되어 있어야 한다.
+  - [Google] 지정 Goolge 계정 검증 후 리디렉션으로 code를 보내줌
+  - [Server] 만들어 놓은 Conroller를 통해 전달받은 `code`와 이미 갖고 있던 `client_id, client_secret, redirect_uri`를 사용해서 인증 파라미터 생성 후 Google과 연계 작업
+  - [Google] 전달 받은 Body값을 통해 토큰을 발행
+  - [Server] 받아온 Token을 통해 Google로 정보 요청
+  - [Google] 토큰 검증 후 데이터 반환
+  - [Server] 해당 인증 정보를 통해 신규 가입 혹은 해당 서버에서 사용할 Token 발행
