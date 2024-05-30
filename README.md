@@ -1322,6 +1322,7 @@ public class SecurityConfig {
   - [Client] 지정 URL로 소셜 요청
   - [Server] 서버에 저장된 `scope`,`client_id`,`redirect_uri`를 통해 URI를 만들어 서드파티(Google)로 `sendRedirect()` 시킴
     - 해당 리디렉션 URI는 Google에 등록되어 있어야 한다.
+    - [공식 문서]([https://burningfalls.github.io](https://developers.google.com/identity/protocols/oauth2/web-server?hl=ko#libraries)) 확인
   - [Google] 지정 Goolge 계정 검증 후 리디렉션으로 code를 보내줌
   - [Server] 만들어 놓은 Conroller를 통해 전달받은 `code`와 이미 갖고 있던 `client_id, client_secret, redirect_uri`를 사용해서 인증 파라미터 생성 후 Google과 연계 작업
   - [Google] 전달 받은 Body값을 통해 토큰을 발행
