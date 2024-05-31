@@ -68,7 +68,14 @@ public class GoogleOauth implements SocialOAuth{
         return redirectURL;
     }
 
-    public ResponseEntity<String> requestAccessToken(String code) {
+    /**
+     * Google에서 인증받은 일회성 코드을 연계에 사용하여 인증 jwt 토큰을 받아옴
+     *
+     * @param code the code
+     * @return the response entity
+     */
+    public GoogleOAuthToken requestAccessToken(String code) throws JsonProcessingException{
+        // ℹ️ 토큰 요청 URL - 공식문서 확인
         String GOOGLE_TOKEN_REQUEST_URL = "https://oauth2.googleapis.com/token";
         RestTemplate restTemplate       = new RestTemplate();
         Map<String, Object> params      = new HashMap<>();
@@ -78,40 +85,62 @@ public class GoogleOauth implements SocialOAuth{
         params.put("redirect_uri"   , GOOGLE_SNS_CALLBACK_URL);
         params.put("grant_type"     , "authorization_code");
 
+        // 👉 Google 연계 시작
         ResponseEntity<String> responseEntity =
                 restTemplate.postForEntity(GOOGLE_TOKEN_REQUEST_URL, params, String.class);
-
-        if(responseEntity.getStatusCode() == HttpStatus.OK){
-            return responseEntity;
-        }
-        return null;
-    }
-
-    public GoogleOAuthToken getAccessToken(ResponseEntity<String> response) throws JsonProcessingException {
+        // ℹ️ 2xx가 아니면 null 반환
+        if(responseEntity.getStatusCode() != HttpStatus.OK) return null;
+        
         // Google에서 받아온 Response Body 데이터
-        log.info("response.getBody() = " + response.getBody());
-        // GoogleOAuthToken 변환
-        return objectMapper.readValue(response.getBody(),GoogleOAuthToken.class);
+        log.info("response.getBody() = " + responseEntity.getBody());
+        /***
+         * {
+         *   "access_token": "~",
+         *   "expires_in": 3598,
+         *   "scope": "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile",
+         *   "token_type": "Bearer",
+         *   "id_token": "~"
+         * }
+         *
+         * **/
+        // 자바 객체로 변환
+        return objectMapper.readValue(responseEntity.getBody(), GoogleOAuthToken.class);
 
     }
 
-    public ResponseEntity<String> requestUserInfo(GoogleOAuthToken oAuthToken) {
+    /**
+     * Google에서 발행한 jwt 토큰을 사용해서 회원 정보를 받아옴
+     *
+     * @param oAuthToken the o auth token
+     * @return the google user
+     * @throws JsonProcessingException the json processing exception
+     */
+    public GoogleUser requestUserInfo(GoogleOAuthToken oAuthToken)  throws JsonProcessingException{
+        // ℹ️ 회원정보 요청 URL - 공식문서 확인 [ AccessToken 필요 ]
         String GOOGLE_USERINFO_REQUEST_URL = "https://www.googleapis.com/oauth2/v1/userinfo";
 
-        //header에 accessToken을 담는다.
+        // 👉 Header에 jwt 토큰을 담음
         HttpHeaders headers = new HttpHeaders();
-        headers.add("Authorization","Bearer " + oAuthToken.getAccess_token());
+        headers.add(HttpHeaders.AUTHORIZATION,"Bearer " + oAuthToken.getAccess_token());
 
-        //HttpEntity를 하나 생성해 헤더를 담아서 restTemplate으로 구글과 통신하게 된다.
+        // 👉 Google과 연계
         RestTemplate restTemplate       = new RestTemplate();
         HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(headers);
         ResponseEntity<String> response = restTemplate.exchange(GOOGLE_USERINFO_REQUEST_URL, HttpMethod.GET,request,String.class);
         log.info("response.getBody() = " + response.getBody());
-        return response;
-    }
-
-    public GoogleUser getUserInfo(ResponseEntity<String> userInfoRes) throws JsonProcessingException{
-        return objectMapper.readValue(userInfoRes.getBody(), GoogleUser.class);
+        /**
+         * {
+         *   "id": "~~~",
+         *   "email": "~",
+         *   "verified_email": true,
+         *   "name": "유정호",
+         *   "given_name": "정호",
+         *   "family_name": "유",
+         *   "picture": "~",
+         *   "locale": "ko"
+         * }
+         * **/
+        return objectMapper.readValue(response.getBody(), GoogleUser.class);
     }
 
 }

@@ -1,8 +1,7 @@
 package com.yoo.securityStudy.controller;
 
-import com.yoo.securityStudy.dto.social.GetSocialOAuthRes;
+import com.yoo.securityStudy.security.dto.JwtToken;
 import com.yoo.securityStudy.social.OAuthService;
-import com.yoo.securityStudy.social.SocialType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.http.ResponseEntity;
@@ -27,8 +26,8 @@ public class SocialController {
     }
 
     @ResponseBody
-    @GetMapping(value = "/auth/{socialType}/callback")
-    public ResponseEntity<GetSocialOAuthRes> callback ( @PathVariable String type
+    @GetMapping(value = "/auth/{type}/callback")
+    public ResponseEntity<JwtToken> callback (@PathVariable String type
             , @RequestParam String code) throws Exception{
         log.info(">> 소셜 로그인 API 서버로부터 받은 code :"+ code);
         return ResponseEntity.ok(oAuthService.oAuthLogin(type, code));
