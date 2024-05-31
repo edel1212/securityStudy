@@ -40,19 +40,28 @@ public class GoogleOauth implements SocialOAuth{
 
     @Override
     public String getOauthRedirectURL() {
+        // 👉 파라미터 정의
         Map<String, String> params = new HashMap<>();
         params.put("scope"          , GOOGLE_DATA_ACCESS_SCOPE);
         params.put("response_type"  , "code");
         params.put("client_id"      , GOOGLE_SNS_CLIENT_ID);
         params.put("redirect_uri"   , GOOGLE_SNS_CALLBACK_URL);
 
-        //parameter를 형식에 맞춰 구성해주는 함수
+        // 👉 파라미터를 URL 형식으로 변경
         String parameterString = params.entrySet()
                 .stream()
                 .map(x->x.getKey()+"="+x.getValue())
                 .collect(Collectors.joining("&"));
 
-        String redirectURL = GOOGLE_SNS_LOGIN_URL+"?"+parameterString;
+        // 👉 리디렉션시킬 URL에 파라미터 추가
+        String redirectURL = GOOGLE_SNS_LOGIN_URL + "?" + parameterString;
+        /***
+         * https://accounts.google.com/o/oauth2/v2/auth
+         * ?scope=https://www.googleapis.com/auth/userinfo.email
+         * %20https://www.googleapis.com/auth/userinfo.profile&response_type=code
+         * &redirect_uri=http://localhost:8080/app/accounts/auth/google/callback
+         * &client_id=824915807954-ba1vkfj4aec6bgiestgnc0lqrbo0rgg3.apps.googleusercontent.com
+         * **/
         log.info("-------------------");
         log.info("redirectURL = " + redirectURL);
         log.info("-------------------");
