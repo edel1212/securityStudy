@@ -1317,15 +1317,137 @@ public class SecurityConfig {
 
 ## 소셜 로그인 (Google) - API 방식 사용
 
-- Token을 사용하여 처리할 경우 일반적인 OAuth 로그인 방식으로는 사용이 불가능하기에 API 방식으로 사용한다.
-- 흐름
-  - [Client] 지정 URL로 소셜 요청
-  - [Server] 서버에 저장된 `scope`,`client_id`,`redirect_uri`를 통해 URI를 만들어 서드파티(Google)로 `sendRedirect()` 시킴
-    - 해당 리디렉션 URI는 Google에 등록되어 있어야 한다.
-    - [공식 문서]([https://burningfalls.github.io](https://developers.google.com/identity/protocols/oauth2/web-server?hl=ko#libraries)) 확인
-  - [Google] 지정 Goolge 계정 검증 후 리디렉션으로 code를 보내줌
-  - [Server] 만들어 놓은 Conroller를 통해 전달받은 `code`와 이미 갖고 있던 `client_id, client_secret, redirect_uri`를 사용해서 인증 파라미터 생성 후 Google과 연계 작업
-  - [Google] 전달 받은 Body값을 통해 토큰을 발행
-  - [Server] 받아온 Token을 통해 Google로 정보 요청
-  - [Google] 토큰 검증 후 데이터 반환
-  - [Server] 해당 인증 정보를 통해 신규 가입 혹은 해당 서버에서 사용할 Token 발행
+- Jwt Token을 사용하여 인증 처리할 경우 일반적인 OAuth 로그인 방식으로는 사용이 불가능하기에 API 방식으로 사용한다.
+
+### 흐름
+
+- [Client] 지정 URL로 소셜 요청
+- [Server] 서버에 저장된 `scope`,`client_id`,`redirect_uri`를 통해 URI를 만들어 서드파티(Google)로 `sendRedirect()` 시킴
+  - 해당 리디렉션 URI는 Google에 등록되어 있어야 한다.
+  - [공식 문서](https://developers.google.com/identity/protocols/oauth2/web-server?hl=ko#libraries) 확인
+- [Google] 지정 Goolge 계정 검증 후 리디렉션으로 code를 보내줌
+- [Server] 만들어 놓은 Conroller를 통해 전달받은 `code`와 이미 갖고 있던 `client_id, client_secret, redirect_uri`를 사용해서 인증 파라미터 생성 후 Google과 연계 작업
+- [Google] 전달 받은 Body값을 통해 토큰을 발행
+- [Server] 받아온 Token을 통해 Google로 정보 요청
+- [Google] 토큰 검증 후 데이터 반환
+- [Server] 해당 인증 정보를 통해 신규 가입 혹은 해당 서버에서 사용할 Token 발행
+
+### Redirect 반환
+
+- 각각 Social 리디렉션 URL을 만들 메서드를 강제할 Interface
+
+  - 확장성을 위해서 Interface를 분리해서 사용한다.
+
+  ```java
+  public interface SocialOAuth {
+      /**
+       * 각 소셜 로그인 페이지로 redirect 할 URL build
+       * 사용자로부터 로그인 요청을 받아 소셜 로그인 서버 인증용 코드 요청
+       */
+      String getOauthRedirectURL();
+  }
+  ```
+
+- `getOauthRedirectURL()`를 구현할 Class
+
+  - `application`의 값을 불러와서 사용
+
+  ```java
+  @Component
+  @Log4j2
+  @RequiredArgsConstructor
+  public class GoogleOauth implements SocialOAuth{
+      // https://accounts.google.com/o/oauth2/v2/auth
+      @Value("${spring.OAuth2.google.url}")
+      private String GOOGLE_SNS_LOGIN_URL;
+      // 인증 ID
+      @Value("${spring.OAuth2.google.client-id}")
+      private String GOOGLE_SNS_CLIENT_ID;
+      // 지정한 리디렉션 URL
+      @Value("${spring.OAuth2.google.callback-url}")
+      private String GOOGLE_SNS_CALLBACK_URL;
+      // scope는 아래처럼 공백으로 되어 URL 에서 `%20`로 붙어서 처리된다.
+      @Value("${spring.OAuth2.google.scope}")
+      private String GOOGLE_DATA_ACCESS_SCOPE;
+
+      @Override
+      public String getOauthRedirectURL() {
+          // 👉 파라미터 정의
+          Map<String, String> params = new HashMap<>();
+          params.put("scope"          , GOOGLE_DATA_ACCESS_SCOPE);
+          params.put("response_type"  , "code");
+          params.put("client_id"      , GOOGLE_SNS_CLIENT_ID);
+          params.put("redirect_uri"   , GOOGLE_SNS_CALLBACK_URL);
+
+          // 👉 파라미터를 URL 형식으로 변경
+          String parameterString = params.entrySet()
+                  .stream()
+                  .map(x->x.getKey()+"="+x.getValue())
+                  .collect(Collectors.joining("&"));
+
+          // 👉 리디렉션시킬 URL에 파라미터 추가
+          String redirectURL = GOOGLE_SNS_LOGIN_URL + "?" + parameterString;
+          /***
+           * https://accounts.google.com/o/oauth2/v2/auth
+           * ?scope=https://www.googleapis.com/auth/userinfo.email
+           * %20https://www.googleapis.com/auth/userinfo.profile&response_type=code
+           * &redirect_uri=http://localhost:8080/app/accounts/auth/google/callback
+           * &client_id=824915807954-ba1vkfj4aec6bgiestgnc0lqrbo0rgg3.apps.googleusercontent.com
+           * **/
+          log.info("-------------------");
+          log.info("redirectURL = " + redirectURL);
+          log.info("-------------------");
+          return redirectURL;
+      }
+  }
+  ```
+
+- 소셜 Type에 맞게 리다이렉트를 시켜줄 Service
+
+  - `HttpServletResponse`를 의존성 주입을 통해 리다이렉션 메서드를 사용
+
+  ```java
+  @Service
+  @RequiredArgsConstructor
+  public class OAuthService {
+      private final GoogleOauth googleOauth;
+      private final HttpServletResponse response;
+
+      public void request(String type) throws IOException {
+          // 👉 Redirection 시킬 URL
+          String redirectURL;
+          // 👉 Social enum 변환
+          SocialType socialType = SocialType.valueOf(type.toUpperCase());
+          switch (socialType){
+              case GOOGLE:
+                  // 👉 리다이렉트 시킬 URL을 생성
+                  redirectURL = googleOauth.getOauthRedirectURL();
+                  break;
+              default:
+                  throw new IllegalArgumentException("알 수 없는 소셜 로그인 형식입니다.");
+          }// switch
+          response.sendRedirect(redirectURL);
+      }
+  }
+  ```
+
+- 소셜 인증을 요청을 받을 Controller
+
+  ```java
+  @RestController
+  @RequiredArgsConstructor
+  @Log4j2
+  @RequestMapping("/app/accounts")
+  public class SocialController {
+
+      private final OAuthService oAuthService;
+
+      @GetMapping("/auth/{type}")
+      public void socialLoginRedirect(@PathVariable String type) throws IOException {
+          log.info("-----------");
+          log.info("socialType :::" + type);
+          log.info("-----------");
+          oAuthService.request(type);
+      }
+  }
+  ```
