@@ -1334,6 +1334,56 @@ public class SecurityConfig {
 
 ### Redirect 반환
 
+- 소셜 인증을 요청을 받을 Controller
+
+  ```java
+  @RestController
+  @RequiredArgsConstructor
+  @Log4j2
+  @RequestMapping("/app/accounts")
+  public class SocialController {
+
+      private final OAuthService oAuthService;
+
+      @GetMapping("/auth/{type}")
+      public void socialLoginRedirect(@PathVariable String type) throws IOException {
+          log.info("-----------");
+          log.info("socialType :::" + type);
+          log.info("-----------");
+          oAuthService.request(type);
+      }
+  }
+  ```
+
+- 소셜 Type에 맞게 리다이렉트를 시켜줄 Service
+
+  - `HttpServletResponse`를 의존성 주입을 통해 리다이렉션 메서드를 사용
+
+  ```java
+  @Service
+  @RequiredArgsConstructor
+  public class OAuthService {
+      private final GoogleOauth googleOauth;
+      private final HttpServletResponse response;
+
+      public void request(String type) throws IOException {
+          // 👉 Redirection 시킬 URL
+          String redirectURL;
+          // 👉 Social enum 변환
+          SocialType socialType = SocialType.valueOf(type.toUpperCase());
+          switch (socialType){
+              case GOOGLE:
+                  // 👉 리다이렉트 시킬 URL을 생성
+                  redirectURL = googleOauth.getOauthRedirectURL();
+                  break;
+              default:
+                  throw new IllegalArgumentException("알 수 없는 소셜 로그인 형식입니다.");
+          }// switch
+          response.sendRedirect(redirectURL);
+      }
+  }
+  ```
+
 - 각각 Social 리디렉션 URL을 만들 메서드를 강제할 Interface
 
   - 확장성을 위해서 Interface를 분리해서 사용한다.
@@ -1402,36 +1452,17 @@ public class SecurityConfig {
   }
   ```
 
-- 소셜 Type에 맞게 리다이렉트를 시켜줄 Service
+### 인증 확인 후 로직
 
-  - `HttpServletResponse`를 의존성 주입을 통해 리다이렉션 메서드를 사용
+```properties
+#- Google에서 인증이 완료되면 지정한 `redirect`로 응답을 보낸다.
+#- 해당 로직에서 계정에 관련된 비즈니스 로직을 구현해주면 된다
+#- 토큰 발급 또는 회원가입 로직 등 다양하게 구현이 가능하다.
+```
 
-  ```java
-  @Service
-  @RequiredArgsConstructor
-  public class OAuthService {
-      private final GoogleOauth googleOauth;
-      private final HttpServletResponse response;
+- 인증 완료 후 리디렉션을 받을 Controller
 
-      public void request(String type) throws IOException {
-          // 👉 Redirection 시킬 URL
-          String redirectURL;
-          // 👉 Social enum 변환
-          SocialType socialType = SocialType.valueOf(type.toUpperCase());
-          switch (socialType){
-              case GOOGLE:
-                  // 👉 리다이렉트 시킬 URL을 생성
-                  redirectURL = googleOauth.getOauthRedirectURL();
-                  break;
-              default:
-                  throw new IllegalArgumentException("알 수 없는 소셜 로그인 형식입니다.");
-          }// switch
-          response.sendRedirect(redirectURL);
-      }
-  }
-  ```
-
-- 소셜 인증을 요청을 받을 Controller
+  - Google 자체의 회원 검증 후 코드를 반환 해줌
 
   ```java
   @RestController
@@ -1442,12 +1473,154 @@ public class SecurityConfig {
 
       private final OAuthService oAuthService;
 
-      @GetMapping("/auth/{type}")
-      public void socialLoginRedirect(@PathVariable String type) throws IOException {
-          log.info("-----------");
-          log.info("socialType :::" + type);
-          log.info("-----------");
-          oAuthService.request(type);
+      @ResponseBody
+      @GetMapping(value = "/auth/{type}/callback")
+      public ResponseEntity<GetSocialOAuthRes> callback ( @PathVariable String type
+              , @RequestParam String code) throws Exception{
+          log.info(">> 소셜 로그인 API 서버로부터 받은 code :"+ code);
+          return ResponseEntity.ok(oAuthService.oAuthLogin(type, code));
       }
+
   }
   ```
+
+- 소셜 로그인 비즈니스로직 Service
+
+```java
+@Service
+@RequiredArgsConstructor
+@Log4j2
+public class OAuthService {
+  private final GoogleOauth googleOauth;
+
+  public JwtToken oAuthLogin(String type, String code) throws IOException {
+   public JwtToken oAuthLogin(String type, String code) throws IOException {
+        // 👉 Social enum 변환
+        SocialType socialType = SocialType.valueOf(type.toUpperCase());
+        switch (socialType) {
+            case GOOGLE:
+                /**
+                 * 👉 일회성 코드를 사용해 토큰을 받음 이를 deserialization해서 자바 객체로 변경
+                 * */
+                GoogleOAuthToken oAuthToken = googleOauth.requestAccessToken(code);
+                /**
+                 * 👉 액세스 토큰을 다시 구글로 보내 사용자 정보를 받음 이를 deserialization해서 자바 객체로 변경
+                 * */
+                GoogleUser googleUser = googleOauth.requestUserInfo(oAuthToken);
+                // ℹ️ 해당 받아온 값을 토대로 회원 DB관련 로직을 적용하자
+                break;
+            default:
+                throw new IllegalArgumentException("알 수 없는 소셜 로그인 형식입니다.");
+        }// switch - case
+
+        // TODO 받아온 데이터를 사용해서 반환 데이터를 만들어주자
+        return JwtToken.builder()
+                .accessToken("엑세스 토큰 발급")
+                .refreshToken("리프레쉬 토큰 발급")
+                .grantType("Bearer")
+                .build();
+    }
+
+}
+```
+
+- Google과 연계 Class
+  - 필요한 정보를 요청하는 URL은 공식 문서에서 확인이 가능하다.
+
+```java
+@Component
+@Log4j2
+@RequiredArgsConstructor
+public class GoogleOauth implements SocialOAuth{
+
+    @Value("${spring.OAuth2.google.url}")
+    private String GOOGLE_SNS_LOGIN_URL;
+
+    @Value("${spring.OAuth2.google.client-id}")
+    private String GOOGLE_SNS_CLIENT_ID;
+
+    @Value("${spring.OAuth2.google.callback-url}")
+    private String GOOGLE_SNS_CALLBACK_URL;
+
+    @Value("${spring.OAuth2.google.client-secret}")
+    private String GOOGLE_SNS_CLIENT_SECRET;
+
+    private final ObjectMapper objectMapper;
+
+    /**
+     * Google에서 인증받은 일회성 코드을 연계에 사용하여 인증 jwt 토큰을 받아옴
+     *
+     * @param code the code
+     * @return the response entity
+     */
+    public GoogleOAuthToken requestAccessToken(String code) throws JsonProcessingException{
+        // ℹ️ 토큰 요청 URL - 공식문서 확인
+        String GOOGLE_TOKEN_REQUEST_URL = "https://oauth2.googleapis.com/token";
+        RestTemplate restTemplate       = new RestTemplate();
+        Map<String, Object> params      = new HashMap<>();
+        params.put("code", code);
+        params.put("client_id"      , GOOGLE_SNS_CLIENT_ID);
+        params.put("client_secret"  , GOOGLE_SNS_CLIENT_SECRET);
+        params.put("redirect_uri"   , GOOGLE_SNS_CALLBACK_URL);
+        params.put("grant_type"     , "authorization_code");
+
+        // 👉 Google 연계 시작
+        ResponseEntity<String> responseEntity =
+                restTemplate.postForEntity(GOOGLE_TOKEN_REQUEST_URL, params, String.class);
+        // ℹ️ 2xx가 아니면 null 반환
+        if(responseEntity.getStatusCode() != HttpStatus.OK) return null;
+
+        // Google에서 받아온 Response Body 데이터
+        log.info("response.getBody() = " + responseEntity.getBody());
+        /***
+         * {
+         *   "access_token": "~",
+         *   "expires_in": 3598,
+         *   "scope": "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile",
+         *   "token_type": "Bearer",
+         *   "id_token": "~"
+         * }
+         *
+         * **/
+        // 자바 객체로 변환
+        return objectMapper.readValue(responseEntity.getBody(), GoogleOAuthToken.class);
+
+    }
+
+    /**
+     * Google에서 발행한 jwt 토큰을 사용해서 회원 정보를 받아옴
+     *
+     * @param oAuthToken the o auth token
+     * @return the google user
+     * @throws JsonProcessingException the json processing exception
+     */
+    public GoogleUser requestUserInfo(GoogleOAuthToken oAuthToken)  throws JsonProcessingException{
+        // ℹ️ 회원정보 요청 URL - 공식문서 확인 [ AccessToken 필요 ]
+        String GOOGLE_USERINFO_REQUEST_URL = "https://www.googleapis.com/oauth2/v1/userinfo";
+
+        // 👉 Header에 jwt 토큰을 담음
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(HttpHeaders.AUTHORIZATION,"Bearer " + oAuthToken.getAccess_token());
+
+        // 👉 Google과 연계
+        RestTemplate restTemplate       = new RestTemplate();
+        HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(headers);
+        ResponseEntity<String> response = restTemplate.exchange(GOOGLE_USERINFO_REQUEST_URL, HttpMethod.GET,request,String.class);
+        log.info("response.getBody() = " + response.getBody());
+        /**
+         * {
+         *   "id": "~~~",
+         *   "email": "~",
+         *   "verified_email": true,
+         *   "name": "유정호",
+         *   "given_name": "정호",
+         *   "family_name": "유",
+         *   "picture": "~",
+         *   "locale": "ko"
+         * }
+         * **/
+        return objectMapper.readValue(response.getBody(), GoogleUser.class);
+    }
+
+}
+```
