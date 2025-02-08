@@ -1,11 +1,14 @@
 # Spring Security Study
 
-- 의존성을 추가하는 순간부터 모든 요청은 Scurity의 Filter를 거치게 된다.
+```properties
+# ✅ 의존성을 추가하는 순간부터 모든 요청은 Security의 Filter를 거치게 된다.
+#    - 추가적인 설정이 없을 경우 spring security에서 기본적으로 제공되는 LoginForm으로 이동
+##     - 계정 및 비밀번호는 console log에 작성 되어있음  
+```
 
-  - 따라서 모든 요청은 Security에서 기본적으로 제공되는 LoginForm으로 이동된다.
-    - 계정 및 비밀번호는 로그에 써 있다.
+## 1 ) 기본 설정 방법
 
-- Dependencies
+### 1 - 1 ) build.gradle
 
 ```groovy
 dependencies {
@@ -13,50 +16,27 @@ dependencies {
 	testImplementation 'org.springframework.security:spring-security-test'
 }
 ```
+### 1 - 2 ) Security Config Class 설정
 
-## 기본 Security 설정
-
-- SpringBoot 버전이 올라가면서 Security 설정 방법이 변경되었다.
-  - 작성일 기준 버전 `3.2.3`버전
-- 지정 클래스는 Bean Scan 대상에 추가 해줘야한다.
-  - `@Component` 어노테이션 사용
-- `SecurityFilterChain`를 구현하는 메서드를 생성한 후 Bean에 추가해준다.
-  - 생성 이후 부터는 모든 요청에 대한 접근이 **허용**으로 변경된다.
-- 함수형 인터페이스를 사용하여 옵션을 적용해준다.
-  - 이전 `체이닝 -> 함수형`으로 변경되었다.
-- `SecurityFilterChain`를 구현한 메서드내의 매개변수인 HttpSecurity 객체에 옵션을 더하는 식으로 설정을 한다.
-- `WebSecurityCustomizer`를 구현한 메서드내에서 Security 필터에서 제외할 요청을 지정 가능하다
-  - 정적파일을 사용하는 경우에는 꼭 해당 설정해주자.
-- 예시 코드
+- SpringBoot 버전이 올라가면서 Security 설정 방법이 **변경 됨**
+  - Security6
+    - 모든 옵션 적용 방법이 **체이닝 -> 함수형**으로 변경
+- 설정 class이므로 `@Configuration`를 지정 하여 Bean에 등록
+- `SecurityFilterChain`을 반환하는 Medthod 생성 후 `@Bean` 등록
+  - 초기 메서드 생성 후 **모든 요청 접근 허용**으로 변경
+- `SecurityFilterChain` 반환 메서드의 `HttpSecurity`에 옵션을 추가하는 방식
+- FunctionalInterface 인 `WebSecurityCustomizer`에서 security filter에서 **검증을 제외할 요청을 지정**할 수 있다
+  - 정적 파일을 사용할 경우 지정 필수
 
   ```java
-  @Component
+  @Configuration
   @Log4j2
   public class SecurityConfig {
 
-      /**
-      * - SecurityFilterChain << 아무 옵션 없이 적용 시 모든 페이지 접근이 허용된다.
-      * */
-      @Bean
+      @Bean  
       public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
-
-          log.info("-------------------------");
-          log.info(" 1) Security Filter Chain");
-          log.info("-------------------------");
-
-          /*************************************************/
-          /** Default Setting **/
-          /*************************************************/
           // 👉 CSRF 사용 ❌
           http.csrf(csrf -> csrf.disable());
-          // 👉 CORS 설정
-          http.cors(cors->{
-              /**
-               * 참고 : https://velog.io/@juhyeon1114/Spring-security%EC%97%90%EC%84%9C-CORS%EC%84%A4%EC%A0%95%ED%95%98%EA%B8%B0
-               *    - 설정 클래스를 만든 후 주입해주면 Cors 설정이 한번에 가능함
-               * */
-              // cors.configurationSource(CorsConfigurationSource)
-          });
           // 👉 Security HTTP Basic 인증 ❌ - 웹 상단 알림창으로 로그인이 뜨는 것 방지
           http.httpBasic(AbstractHttpConfigurer::disable);
           // 👉 세션 관련 설정  -  "SessionCreationPolicy.STATELESS" 스프링시큐리티가 생성하지도않고 기존것을 사용하지도 않음
@@ -87,43 +67,110 @@ dependencies {
   }
   ```
 
-## 예외 핸들러 설정
+## 2 ) CORS 설정 방법
+- CorsConfigurationSource 반환 Method에 설정 내용 구현 후 `SecurityFilterChain` 내 `http.cors()`에 주입
+  - Bean 등록 필수
+```java
+@Component
+@EnableWebSecurity
+public class SecurityConfig {
 
-- `AuthenticationEntryPoint` 설정
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        // ℹ️ CORS 설정
+        http.cors(cors->{
+            cors.configurationSource(corsConfigurationSource());
+        });
 
-  - 인증이 실패했을 때 사용자를 리디렉션하거나 에러 메시지를 반환하는 역할을 담당함
-    - 인증 실패 처리: 사용자가 인증되지 않았거나, 인증 정보가 잘못되었을 때 호출됩니다.
-    - 리디렉션: 웹 애플리케이션에서는 인증되지 않은 사용자를 로그인 페이지로 리디렉션하는 것이 일반적입니다. AuthenticationEntryPoint를 사용하여 이러한 리디렉션을 설정할 수 있습니다
-    - 에러 메시지 반환: 인증이 실패하면 사용자에게 에러 메시지나 HTTP 상태 코드를 반환하여 문제의 원인을 알릴 수 있습니다.
-  - 사용 방법
+        return http.build();
+    }
 
-    - `AuthenticationEntryPoint`를 구현한 클래스 제작
-    - Bean Scan 대상에 올려주기 위해 `@Component`를 추가해주자
+    /**
+     * <h3>CORS 설정</h3>
+     *
+     * @return the cors configuration source
+     */
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        // 새로운 CORS 설정 객체 생성
+        CorsConfiguration configuration = new CorsConfiguration();
+        // 모든 출처에서의 요청을 허용
+        configuration.addAllowedOriginPattern("*");
+        // 모든 HTTP 메소드를 허용 (GET, POST, PUT, DELETE, OPTIONS 등)
+        configuration.setAllowedMethods(Collections.singletonList("*"));
+        // 모든 HTTP 헤더를 허용
+        configuration.setAllowedHeaders(Collections.singletonList("*"));
+        // 자격 증명(예: 쿠키, 인증 정보)을 포함한 요청을 허용
+        configuration.setAllowCredentials(true);
+        // 캐시 시간을 3600초(1시간)으로 설정
+        configuration.setMaxAge(3600L);
 
-      ```java
-      @Log4j2
-      @Component
-      public class CustomAuthenticationEntryPoint implements AuthenticationEntryPoint {
+        // URL 경로에 기반한 CORS 설정 소스 객체 생성
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        // 모든 경로에 대해 위에서 설정한 CORS 구성을 등록
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
+    }
+}
+```
 
-        @Override
-        public void commence(HttpServletRequest request, HttpServletResponse response, AuthenticationException authException) throws IOException, ServletException {
-            log.info("- Custom Authentication Entry PointHandler 접근 -");
-            var objectMapper = new ObjectMapper();
-            int scUnauthorized = HttpServletResponse.SC_UNAUTHORIZED;
-            response.setStatus(scUnauthorized);
-            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-            response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-            ErrorResponse errorResponse = ErrorResponse.builder()
-                    .code(scUnauthorized)
-                    .message("예외 메세지 등록")
-                    .build();
-            response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
-        }
-      }
-      ```
 
-- `AccessDeniedHandler` 설정
-  - 인증에 실패했을 경우 처리를 담당한다.
+## 3 ) Custom 예외 Handler
+
+### 3 - 1 ) `AuthenticationEntryPoint` 설정
+```properties
+# ✅ Spring Security에서 인증되지 않은 사용자가 보호된 리소스에 접근할 때 호출되는 진입점(Entry Point)을 제어  
+#    -  **인증이 필요한데, 인증되지 않은 사용자가 접근했을 때** 를 제어
+```
+
+#### 3 - 1 - A ) Custom AuthenticationEntryPoint Class 
+- `AuthenticationEntryPoint`의 void 형태인 `commence()`를 구현
+- `@Component`를 사용하여 Bean 등록
+```java
+@Component
+public class CustomAuthenticationEntryPoint implements AuthenticationEntryPoint {
+  @Override
+  public void commence(HttpServletRequest request, HttpServletResponse response, AuthenticationException authException) throws IOException, ServletException {
+      var objectMapper = new ObjectMapper();
+      int scUnauthorized = HttpServletResponse.SC_UNAUTHORIZED;
+      response.setStatus(scUnauthorized);
+      response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+      response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+      ErrorResponse errorResponse = ErrorResponse.builder()
+              .code(scUnauthorized)
+              .message("예외 메세지 등록")
+              .build();
+      response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
+  }
+}
+```
+
+#### 3 - 1 - B ) SecurityConfig
+- `exceptionHandling()`내 해당 custom handler 주입
+```java
+@Configuration
+@RequiredArgsConstructor
+public class SecurityConfig {
+
+  private final CustomAuthenticationEntryPoint customAuthenticationEntryPoint;
+
+  @Bean
+  public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
+    // Custom Exception Handling
+    http.exceptionHandling(handling ->
+            handling
+                    // ✨ AuthenticationEntryPoint
+                    .authenticationEntryPoint(customAuthenticationEntryPoint)
+    );
+    return http.build();
+  }
+}
+```
+
+
+### 3 - 2 ) `AccessDeniedHandler` 설정
+// TODO
+- 인증에 실패했을 경우 처리를 담당한다.
   - 사용 방법
     - `AccessDeniedHandler`를 구현한 클래스 제작
     - Bean Scan 대상에 올려주기 위해 `@Component`를 추가해주자
@@ -147,50 +194,7 @@ dependencies {
         }
       }
       ```
-- `SecurityConfig` 설정
 
-  - 의존성 주입 후 `exceptionHandling()`에 등록
-
-    ```java
-    @Component
-    @RequiredArgsConstructor
-    @Log4j2
-    public class SecurityConfig {
-
-      // 접근 제어 핸들러
-      private final CustomAuthenticationEntryPoint customAuthenticationEntryPoint;
-
-      @Bean
-      public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
-
-
-        // Custom Exception Handling
-        http.exceptionHandling(handling ->
-                handling
-                        // ✨ Access Denied Handling
-                        .accessDeniedHandler(customAccessDeniedHandler)
-                        // ✨ AuthenticationEntryPoint
-                        .authenticationEntryPoint(customAuthenticationEntryPoint)
-        );
-
-        return http.build();
-      }
-
-
-      /**
-       * Security - Custom Bean 등록
-       * */
-      @Bean
-      public WebSecurityCustomizer webSecurityCustomizer(){
-        return web -> web.ignoring()
-                // Login 접근 허용
-                .requestMatchers(HttpMethod.POST,"/member/login")
-                // Spring Boot의 resources/static 경로의 정적 파일들 접근 허용
-                .requestMatchers(PathRequest.toStaticResources().atCommonLocations());
-      }
-
-    }
-    ```
 
 - `AuthFailureHandler` 설정
   - 해당 핸들러는 로그인 실패 시 핸들링 하는 핸들러이다. - ℹ️ 단 ! **_jwt 를사용할 경우 사용이 불가능하다._**
