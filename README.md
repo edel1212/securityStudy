@@ -169,430 +169,463 @@ public class SecurityConfig {
 
 
 ### 3 - 2 ) `AccessDeniedHandler` 설정
-// TODO
-- 인증에 실패했을 경우 처리를 담당한다.
-  - 사용 방법
-    - `AccessDeniedHandler`를 구현한 클래스 제작
-    - Bean Scan 대상에 올려주기 위해 `@Component`를 추가해주자
-      ```java
-      @Log4j2
-      @Component
-      public class CustomAccessDeniedHandler implements AccessDeniedHandler {
-        @Override
-        public void handle(HttpServletRequest request, HttpServletResponse response, AccessDeniedException accessDeniedException) throws IOException, ServletException {
-          log.info("- Custom Access Denied Handler 접근 -");
-          var objectMapper = new ObjectMapper();
-          int scUnauthorized = HttpServletResponse.SC_UNAUTHORIZED;
-          response.setStatus(scUnauthorized);
-          response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-          response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-          ErrorResponse errorResponse = ErrorResponse.builder()
-                  .code(scUnauthorized)
-                  .message("접근 권한이 없습니다.")
-                  .build();
-          response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
-        }
-      }
-      ```
+- 사용자가 인증은 되었지만, 해당 리소스를 접근할 권한이 없을 때 어떻게 응답할지를 지정
+
+#### 3 - 2 - A ) Custom CustomAccessDeniedHandler Class
+- `AccessDeniedHandler`의 void 형태인 `handle()`를 구현
+- `@Component`를 사용하여 Bean 등록 
+
+```java
+@Log4j2
+@Component
+public class CustomAccessDeniedHandler implements AccessDeniedHandler {
+  @Override
+  public void handle(HttpServletRequest request, HttpServletResponse response, AccessDeniedException accessDeniedException) throws IOException, ServletException {
+    var objectMapper = new ObjectMapper();
+    int scUnauthorized = HttpServletResponse.SC_UNAUTHORIZED;
+    response.setStatus(scUnauthorized);
+    response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+    response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+    ErrorResponse errorResponse = ErrorResponse.builder()
+            .code(scUnauthorized)
+            .message("접근 권한이 없습니다.")
+            .build();
+    response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
+  }
+}
+```
+
+#### 3 - 2 - B ) SecurityConfig
+- `exceptionHandling()`내 해당 custom handler 주입
+```java
+@Configuration
+@RequiredArgsConstructor
+public class SecurityConfig {
+
+  private final CustomAccessDeniedHandler customAccessDeniedHandler;
+
+  @Bean
+  public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
+    // Custom Exception Handling
+    http.exceptionHandling(handling ->
+            handling
+                    // ✨ AccessDeniedHandler
+                    .authenticationEntryPoint(customAccessDeniedHandler)
+    );
+    return http.build();
+  }
+}
+```
+
+### 3 - 3 ) `AuthFailureHandler` 설정
+- **폼 로그인 (formLogin())이나 UsernamePasswordAuthenticationFilter**를 사용할 때 인증 실패를 처리하기 위해 사용
+  - 세션 기반 인증에서는 로그인 요청을 POST /login으로 보내고, 서버에서 인증 실패 시 failureHandler를 실행 
+  -  **jwt 를사용할 경우 사용이 불가능하다._**
+
+#### 3 - 3 - A ) Custom SimpleUrlAuthenticationFailureHandler Class
+- `SimpleUrlAuthenticationFailureHandler`를 상속하여 `onAuthenticationFailure()`를 **Override 하여 진행**
+  - Interface인 `AuthenticationFailureHandler`를 구현하여 진행 또한 가능 
+  - `SimpleUrlAuthenticationFailureHandler`를 사용 이유는?
+    - `AuthenticationFailureHandler`를 구한현 클래스이므로 같은 기능을 작동한다.
+- `@Component`를 지정하여 Bean 등록 필요
+```java
+@Log4j2
+@Component
+public class CustomAuthFailureHandler extends SimpleUrlAuthenticationFailureHandler {
+  @Override
+  public void onAuthenticationFailure(HttpServletRequest request, HttpServletResponse response, AuthenticationException exception) throws IOException {
+    log.info("- Custom Auth Failure Handler 접근 -");
+    var objectMapper = new ObjectMapper();
+    String errorMessage;
+    if (exception instanceof BadCredentialsException) {
+      errorMessage = "아이디와 비밀번호를 확인해주세요.";
+    } else if (exception instanceof InternalAuthenticationServiceException) {
+      errorMessage = "내부 시스템 문제로 로그인할 수 없습니다. 관리자에게 문의하세요.";
+    } else if (exception instanceof UsernameNotFoundException) {
+      errorMessage = "존재하지 않는 계정입니다.";
+    } else {
+      errorMessage = "알 수없는 오류입니다.";
+    }
+    ErrorResponse errorResponse = ErrorResponse.builder()
+            .code(HttpServletResponse.SC_UNAUTHORIZED)
+            .message(errorMessage)
+            .build();
+    // 응답의 문자 인코딩을 UTF-8로 설정
+    response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+    response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
+  }
+}
+```
+#### 3 - 3 - B ) SecurityConfig
+
+- `formLogin()`내 함수 등록 `failureHandler(customAuthFailureHandler)`
+- ℹ️ 중요 확인 사항
+  - `loginProcessingUrl()`에 등록된 주소는 Controller가 없다 action="주소"에 해당되는 값이다.
+    - Spring Security의 필터에서 제외 되기에 FailureHandler를 등록해도 제외된다.
+    - ✨ `formLogin()`에서 `loginProcessingUrl()`를 지정하면 **누구나 접근이 가능** 
+```java
+@Configuration
+@RequiredArgsConstructor
+@Log4j2
+public class SecurityConfig {
+  private final CustomAuthFailureHandler customAuthFailureHandler;
+
+  @Bean
+  public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
+    // 👉 로그인을 사용할 loginProcessingUrl을  Front단 action 주소임 - 컨트롤러 없음 설정해준다.
+    http.formLogin(login->login.loginProcessingUrl("/member/login")
+            .failureHandler(customAuthFailureHandler));
+    return http.build();
+  }
+
+  @Bean
+  public WebSecurityCustomizer webSecurityCustomizer(){
+      return web -> web.ignoring()
+              /*********************************************/
+              /** 아래 주석 내용떄문에 삽질함 ... */
+              /*********************************************/
+              // Login 접근 허용
+              //.requestMatchers(HttpMethod.POST,"/member/login"))
+              ;  
+  }
+}
+```
+
+### 3 - 4 ) 계정 및 비밀번호 예외 처리 방법 - `AuthFailureHandler` 사용 ❌   
+
+```properties
+# ✅ 방법은 크게 2가지가 존재함 
+#    - 1 ) `UsernamePasswordAuthenticationFilter`를 상속한 클래스를 만든 후 Filter 순서를 바꾸는 방법
+#    - 2 ) `@RestControllerAdvice`를 지정한 ExceptionController를 구현하여 처리하는 방법    
+```
+
+#### ✨ `UsernamePasswordAuthenticationFilter` 방법
+- Spring Security의 필터의 순서를 바꿔서 진행하는 방법
+- Security의 사용 방법에서 크게 벗어나지 않지는 방법
+- **로그인 시** 파라미터를 받는 방식에 대한 **추가 설정 필요**함
+  - form 방식 일 경우
+    - `HttpServletRequest`에서 `request.getParameter("아이디 또는 비밀번호")`를 사용
+  - json 방식일 경우
+    - `RequestLogin requestLogin = mapper.readValue(request.getInputStream(), RequestLogin.class);`
 
 
-- `AuthFailureHandler` 설정
-  - 해당 핸들러는 로그인 실패 시 핸들링 하는 핸들러이다. - ℹ️ 단 ! **_jwt 를사용할 경우 사용이 불가능하다._**
-  - 내부 Form 설정을 사용할 경우만 사용이 가능하다
-  - 사용 방법
-    - `SimpleUrlAuthenticationFailureHandler`를 상속한(`extends`) 클래스 제작 또는 `AuthenticationFailureHandler`를 구현한(`implements`) 클래스를 제작
-      - `SimpleUrlAuthenticationFailureHandler`를 사용하는 이유는?
-        - `AuthenticationFailureHandler`를 구한현 클래스이므로 같은 기능을 작동한다.
-        - SimpleUrl을 사용할 경우 `setDefaultFailureUrl()`를 사용하여 이동할 URL을 지정 가능하다.
-    - Bean Scan 대상에 올려주기 위해 `@Component`를 추가해주자
-      ```java
-      @Log4j2
-      @Component
-      public class CustomAuthFailureHandler extends SimpleUrlAuthenticationFailureHandler {
-        @Override
-        public void onAuthenticationFailure(HttpServletRequest request, HttpServletResponse response, AuthenticationException exception) throws IOException {
-          log.info("- Custom Auth Failure Handler 접근 -");
-          var objectMapper = new ObjectMapper();
-          String errorMessage;
-          if (exception instanceof BadCredentialsException) {
-            errorMessage = "아이디와 비밀번호를 확인해주세요.";
-          } else if (exception instanceof InternalAuthenticationServiceException) {
-            errorMessage = "내부 시스템 문제로 로그인할 수 없습니다. 관리자에게 문의하세요.";
-          } else if (exception instanceof UsernameNotFoundException) {
-            errorMessage = "존재하지 않는 계정입니다.";
-          } else {
-            errorMessage = "알 수없는 오류입니다.";
-          }
-          ErrorResponse errorResponse = ErrorResponse.builder()
-                  .code(HttpServletResponse.SC_UNAUTHORIZED)
-                  .message(errorMessage)
-                  .build();
-          // 응답의 문자 인코딩을 UTF-8로 설정
-          response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-          response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
-        }
-      }
-      ```
-- `SecurityConfig` 설정
+#### 3 - 4 - A ) Custom UsernamePasswordAuthenticationFilter Class 설정
+```properties
+# ✅ UsernamePasswordAuthenticationFilter는 AbstractAuthenticationProcessingFilter를 상속은 class 이다.
+#
+# ✏️ 중요
+#  - **Bean 등록 대상이 아닌** 객체 생성을 통해 주입되는 Class 이므로 `@Component` 어노테이션은 필요 없다.
+#  - 부모 **생성자 메서드의 인자 값은 필수**이다. 없을 경우 null point exception 발생
+#    - `super(authenticationManager);`에 필요 값은 **AuthenticationManager** 이다.
+#    - ✍️ @RequiredArgsConstructor를 사용해도 부모 생성 메서드인 super()에는 주입되지 않으니 주의하다!
+```
+- 필요한 메서드들을 `@Override` 하여 구현 필요
+  - 로그인  : `Authentication attemptAuthentication()`
+    - 반환 값은 `getAuthenticationManager()`를 사용해 new UsernamePasswordAuthenticationToken()를 주입 해주자
+      - username, password, roles 순서이며, **roles의 경우 optional이다.**
+  - 성공   : `void successfulAuthentication()`
+  - 실패   : `void unsuccessfulAuthentication()`
 
-  - 의존성 주입 후 `formLogin()`내 함수 등록 `failureHandler(customAuthFailureHandler)`
-  - ℹ️ 중요 확인 사항
-    - `loginProcessingUrl()`에 등록된 주소는 Controller가 없다 action="주소"에 해당되는 값이다.
-    - `ignoring()`에 LoginProcessingUrl을 등록하면 안된다.
-      - Spring Security의 필터에서 제외 되기에 FailureHandler를 등록해도 제외된다.
-      - 사용 했던 이유는 로그인 페이지는 접근이 무조건 가능해야한다 생각함
-        - 하지만 `formLogin()`에서 `loginProcessingUrl()`를 지정하면 누구나 접근이 가능 했음..!
-  - ```java
-    @Component
-    @RequiredArgsConstructor
-    @Log4j2
-    public class SecurityConfig {
+```java
+@Log4j2
+public class AuthenticationFilter extends UsernamePasswordAuthenticationFilter {
 
-      // 인증 실패 제어 핸들러
-      private final CustomAuthFailureHandler customAuthFailureHandler;
+  public AuthenticationFilter(AuthenticationManager authenticationManager) { super(authenticationManager); }
 
-      @Bean
-      public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
+  @Override
+  public Authentication attemptAuthentication(HttpServletRequest request, HttpServletResponse response) throws AuthenticationException {
+    try {
+      var mapper = new ObjectMapper();
+      RequestLogin requestLogin = mapper.readValue(request.getInputStream(), RequestLogin.class);
+      log.info("getEmail ::: {}", requestLogin.getEmail());
+      log.info("getPassword ::: {}", requestLogin.getPwd());
+      return getAuthenticationManager().authenticate(
+              new UsernamePasswordAuthenticationToken(requestLogin.getEmail(), requestLogin.getPwd(), new ArrayList<>()));
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
 
-        // 👉 로그인을 사용할 loginProcessingUrl을  Front단 action 주소임 - 컨트롤러 없음 설정해준다.
-        http.formLogin(login->login.loginProcessingUrl("/member/login")
-                .failureHandler(customAuthFailureHandler));
+  // 성공 시
+  @Override
+  protected void successfulAuthentication(HttpServletRequest request, HttpServletResponse response, FilterChain chain, Authentication authResult) throws IOException, ServletException {
+    // 아래의 정보를 통해 성공 로직을 채울 수 있음
+    authResult.getAuthorities();
+    authResult.getPrincipal();
+    super.successfulAuthentication(request, response, chain, authResult);
+  }
+  
+  // 실패 시
+  @Override
+  protected void unsuccessfulAuthentication(HttpServletRequest request, HttpServletResponse response, AuthenticationException failed) throws IOException, ServletException {
+    super.unsuccessfulAuthentication(request, response, failed);
+  }
+  
+}
+```
 
+#### 3 - 4 - B ) Security Config
+- UserDetailService 부분은 제외하여 진행
+```java
+@Configuration
+@RequiredArgsConstructor
+@Log4j2
+public class SecurityConfig {
+    private final PasswordEncoder passwordEncoder;
+    private final UserService userService;
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
+        // SecurityFilterChain 내에서 AuthenticationManager 설정
+        AuthenticationManagerBuilder authenticationManagerBuilder = http.getSharedObject(AuthenticationManagerBuilder.class);
+        // UserDetailsService(사용자 정보 조회 서비스) 및 비밀번호 인코딩 방식 지정
+        authenticationManagerBuilder.userDetailsService(userService).passwordEncoder(passwordEncoder);
+        // AuthenticationManager 객체 생성 (Spring Security에서 인증을 담당하는 핵심 객체)
+        AuthenticationManager authenticationManager = authenticationManagerBuilder.build();
+        // Spring Security의 인증 매니저로 설정
+        http.authenticationManager(authenticationManager); 
+        
+        // 필터 등록
+        http.addFilter(this.getAuthenticationFilter(authenticationManager));
         return http.build();
-      }
-
-      /**
-       * Security - Custom Bean 등록
-       * */
-      @Bean
-      public WebSecurityCustomizer webSecurityCustomizer(){
-          return web -> web.ignoring()
-                  /*********************************************/
-                  /** 아래 주석 내용떄문에 삽질함 ... */
-                  /*********************************************/
-                  // Login 접근 허용
-                  //.requestMatchers(HttpMethod.POST,"/member/login")
-
-                  // Spring Boot의 resources/static 경로의 정적 파일들 접근 허용
-                  .requestMatchers(PathRequest.toStaticResources().atCommonLocations());
-      }
     }
-    ```
 
-## `AuthFailureHandler`를 사용하지 않고 계정 및 비밀번호 예외 처리 방법
-
-- 방법은 크게 2가지가 있다.
-  - `AbstractAuthenticationProcessingFilter`를 상속한 클래스를 만든 후 Filter 순서를 바꾼다.
-  - `@RestControllerAdvice`를 지정한 ExceptionController를 구현하여 처리하는 방법
-- ✨ `AbstractAuthenticationProcessingFilter` 방법
-  - Spring Security의 필터의 순서를 바꿔서 진행하는 방법이다.
-    - Security의 사용 방법에서 크게 벗어나지 않지만 가독성이 떨어지는 측면이 있다.
-    - 로그인 시 파라미터를 JSON으로 받기 위해 추가적인 설정이 필요하다.
-      - `HttpServletRequest request`에서 `getParameter()`를 사용하는 form 방식을 사용한다면 크게 불편한 문제는 아니다.
-  - 사용 방법
-    - `AbstractAuthenticationProcessingFilter`를 상속하는 Class 생성
-      - ✏️ 중요
-        - Bean 등록 대상이 아닌 객체 생성을 통해 주입되는 Class 이므로 `@Component`와 같은 어노테이션은 불필요
-        - 생성자 메서드의 `super(defaultFilterProcessesUrl);`에 전송되는 파라미터 값은 로그인 `action url path`이다
-      - `Authentication attemptAuthentication()`메서드 구현은 필수이다
-        - 로그인 관련 메서드이다.
-      - 성공 시, 실패 시 핸들링을 해주기 위해서는 각각 필요한 메서드를 `@Override`해줘야한다.
-        - 성공 : `void successfulAuthentication()`
-        - 실패 : `void unsuccessfulAuthentication()`
-- `AbstractAuthenticationProcessingFilter`상속 구현 코드
-
-  ```java
-  public class JwtLoginFilter extends AbstractAuthenticationProcessingFilter {
-
-      private JwtUtil jwtUtil;
-
-      // ✨ 부모Class가 생성자가 있기에 super()를 통해 url을 주입
-      protected JwtLoginFilter(String defaultFilterProcessesUrl, JwtUtil jwtUtil) {
-          super(defaultFilterProcessesUrl); // 👉 여기에 입력되는것이 login path이다
-          this.jwtUtil = jwtUtil;
-      }
-
-      // 👉 인증 처리 - 필수 구현 메서드
-      @Override
-      public Authentication attemptAuthentication(HttpServletRequest request, HttpServletResponse response) throws AuthenticationException, IOException, ServletException {
-          // ✨ 필요에 맞는 parameter명을 맞춰서 사용해주자
-          String email = request.getParameter("아이디 파라미터명");
-          String pw    = request.getParameter("패스워드 파라미터명");
-          return null;
-      }시
-
-      // 성공 시
-      @Override
-      protected void successfulAuthentication(HttpServletRequest request, HttpServletResponse response, FilterChain chain, Authentication authResult) throws IOException, ServletException {
-          // 아래의 정보를 통해 성공 로직을 채울 수 있음
-          authResult.getAuthorities();
-          authResult.getPrincipal();
-          super.successfulAuthentication(request, response, chain, authResult);
-      }
-
-      // 실패 시
-      @Override
-      protected void unsuccessfulAuthentication(HttpServletRequest request, HttpServletResponse response, AuthenticationException failed) throws IOException, ServletException {
-          // TODO Fail 시 설정
-          super.unsuccessfulAuthentication(request, response, failed);
-      }
-
-  }
-  ```
-
-- `SecurityConfig` 설정
-
-  ```java
-
-  @Configuration
-  @RequiredArgsConstructor
-  @Log4j2
-  public class SecurityConfig {
-      // 인증 실패 제어 핸들러
-      private final JwtUtil jwtUtil;
-
-      @Bean
-      public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
-          // 👉  필터의 순서를 변경해준다.
-          http.addFilterBefore(new JwtLoginFilter("/member/login", jwtUtil)
-                  // 비밀번호 필터보다 먼저 실행한다.
-                  , UsernamePasswordAuthenticationFilter.class );
-          return http.build();
-      }
-
-  }
-  ```
-
-- ✨ `@RestControllerAdvice` 방법
-
-  - 간단하게 발생하는 예외를 Catch하여 반환하는 방법이다.
-  - 사용 방법
-
-    - `ExceptionController` 구현 코드
-
-      ```java
-      @RestControllerAdvice
-      @Log4j2
-      public class ExceptionController {
-
-          // 💬 BadCredentialsException 발생 시 해당 Controller로 반환
-          @ExceptionHandler(BadCredentialsException.class)
-          public ResponseEntity badCredentialsException(BadCredentialsException e) {
-              ErrorResponse errorResponse = ErrorResponse.builder()
-                      .code(HttpServletResponse.SC_UNAUTHORIZED)
-                      .message("아이디와 비밀번호를 확인해주세요.")
-                      .build();
-              log.error("----------------------");
-              log.info(e.getMessage());
-              log.error("----------------------");
-              return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
-          }
-      }
-      ```
-
-## UserDetailService 설정
-
-- **DB를** 통해 회원을 관리하기 위해서는 꼭 필요한 설정이다.
-- `UserDetailsService`를 구현한 구현체 클래스가 필요하다.
-  - 해당 Interface가 구현을 강제하는 메서드인 `UserDetails loadUserByUsername()`가 인증을 진행한다.
-    - `UserDetails`또한 Interface이며, 해당 Interface를 구현한 User를 반환하거나 상속한 Class를 반환해줘야한다.
-      - `User`를 반환해도 괜찮지만 아이디, 패스워드, 권한 밖에 없으므로 상속을 통해 다양한 데이터를 객체로
-        담아 사용하기 위해서는 상속을 통해 사용해주자.
-- ### Entity
-
-  - 권한의 경우 Enum을 통해 Table을 생성한다.
-    - `@ElementCollection(fetch = FetchType.LAZY)` 어노테이션을 통해 해당 테이블은 `회원ID, 권한`이 PK로 설정된다.
-    - `@Enumerated(EnumType.STRING)`를 통해 Enum이 숫자가 아닌 문자형태로 지정한 권한이 저장된다.
-  - ⭐️ 권한 Roles
-    ```java
-    public enum Roles {
-      USER ,
-      MANAGER ,
-      ADMIN ,
+    private AuthenticationFilter getAuthenticationFilter(AuthenticationManager authenticationManager){
+        return new AuthenticationFilter(authenticationManager);
     }
-    ```
-  - ⭐️ 회원 Member
+}
+```
 
-    ```java
-    @Entity
-    @AllArgsConstructor
-    @NoArgsConstructor
-    @Getter
-    @Builder
-    public class Member {
-      @Id
-      private String id;
-
-      @Column(nullable = false)
-      private String password;
-
-      @Column(nullable = false)
-      private String name;
-
-      // ⭐️ ElementCollection을 사용해줘야 컬렉션 형태를 1 : N 테이블을 생성해준다.
-      @ElementCollection(fetch = FetchType.LAZY)
-      // ⭐️ Enum명 그대로 저장 - 미사용 시 숫자로 저장됨
-      @Enumerated(EnumType.STRING)
-      @Builder.Default
-      @Column(nullable = false)
-      private Set<Roles> roles = new HashSet<>();
-    }
-    ```
-
-- ### 회원가입
-- `PasswordEncoder` 설정
-
-  - 미사용 시 Spring Security 내에서 비밀번호를 인가 해주지 않는다.
-  - `@Bean`등록 필수
-
-    - `SecurityConfig` 내부에서 PasswordEncoder의 내용을 변경 하고 Bean 등록 시 Cycle 에러가 발생하니 주의해주자.
-
-      ```text
-      The dependencies of some of the beans in the application context form a cycle:
-
-      securityConfig defined in file [/Users/yoo/Desktop/Project/securityStudy/build/classes/java/main/com/yoo/securityStudy/config/SecurityConfig.class]
-      ┌─────┐
-      |  memberServiceImpl defined in file [/Users/yoo/Desktop/Project/securityStudy/build/classes/java/main/com/yoo/securityStudy/service/MemberServiceImpl.class]
-      └─────┘
-      ```
-
-  - 사용 코드
-
-  ```java
-  // Bean Scan 대상 지정
-  @Component
-  public class AppConfig {
-    // 👉 Bean 등록
+#### 3 - 4 - C ) Password Config
+```java
+@Configuration
+public class PasswordConfig {
     @Bean
     public PasswordEncoder passwordEncoder(){
         return PasswordEncoderFactories.createDelegatingPasswordEncoder();
     }
-  }
+}
+```
+
+
+#### ✨ `@RestControllerAdvice` 방법
+- 간단하게 발생하는 예외를 Catch하여 반환하는 방법
+```java
+@RestControllerAdvice
+@Log4j2
+public class ExceptionController {
+
+    // 💬 BadCredentialsException 발생 시 해당 Controller로 반환
+    @ExceptionHandler(BadCredentialsException.class)
+    public ResponseEntity badCredentialsException(BadCredentialsException e) {
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .code(HttpServletResponse.SC_UNAUTHORIZED)
+                .message("아이디와 비밀번호를 확인해주세요.")
+                .build();
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+    }
+}
+```
+
+## 4 ) UserDetailService 설정
+
+- **DB를** 통해 회원을 관리하기 위해서는 꼭 필요한 설정이다.
+- `UserDetailsService`를 구현한 구현체 클래스가 필요하다.
+  - Interface에서 구현을 강제하는 메서드 `UserDetails loadUserByUsername()`를 통해 인증을 진행
+    - 반환 값은 User를 반환 또는 상속한 Class를 반환 필요
+      - `User`를 반환해도 괜찮지만 아이디, 패스워드, 권한 밖에 없으므로 상속을 통해 다양한 데이터를 객체로 커스텀이 가능하기에 상속을 통해 처리
+
+### 4 - 1 ) Entity
+
+### 4 - 1 - A ) 권한
+- Enum을 통해 Table을 생성
+```java
+public enum Roles {
+  USER ,
+  MANAGER ,
+  ADMIN ,
+}
+```
+### 4 - 1 - A ) 회원 Entity
+- 권한 설정의 경우 enmu에 대해 `@Enumerated(EnumType.STRING)`를 통해 Enum이 숫자가 아닌 문자형태로 지정한 권한이 저장 및 `@ElementCollection(fetch = FetchType.LAZY)`을 통해 해당 테이블은 `회원ID, 권한`이 PK로 설정 됨 
+```java
+@Entity
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@Getter
+public class Member {
+  @Id
+  private String id;
+
+  @Column(nullable = false)
+  private String password;
+
+  @Column(nullable = false)
+  private String name;
+
+  // ⭐️ ElementCollection을 사용해줘야 컬렉션 형태를 1 : N 테이블을 생성해준다.
+  @ElementCollection(fetch = FetchType.LAZY)
+  // ⭐️ Enum명 그대로 저장 - 미사용 시 숫자로 저장됨
+  @Enumerated(EnumType.STRING)
+  @Builder.Default
+  @Column(nullable = false)
+  private Set<Roles> roles = new HashSet<>();
+}
+```
+
+### 4 - 2  ) PasswordEncoder 설정
+- `SecurityConfig` 내부에서 PasswordEncoder를 Bean 등록 시 **Cycle (순환 참조) 에러**가 발생하니 주의하자
+  ```text
+  The dependencies of some of the beans in the application context form a cycle:
+
+  securityConfig defined in file [/Users/yoo/Desktop/Project/securityStudy/build/classes/java/main/com/yoo/securityStudy/config/SecurityConfig.class]
+  ┌─────┐
+  |  memberServiceImpl defined in file [/Users/yoo/Desktop/Project/securityStudy/build/classes/java/main/com/yoo/securityStudy/service/MemberServiceImpl.class]
+  └─────┘
   ```
+- 미사용 시 Spring Security 내에서 비밀번호를 인가 해주지 않음 필수 사항
+- `@Bean`등록 필수 사항
 
-- 비즈니스 로직
-
-  - 사용 코드
-
-  ```java
-  @Service
-  @RequiredArgsConstructor
-  @Log4j2
-  public class MemberServiceImpl implements MemberService, UserDetailsService {
-      private final MemberRepository memberRepository;
-      // 👉 의존성 주입
-      private final PasswordEncoder passwordEncoder;
-      @Override
-      public SignUpRes registerMember(SignUpReq signUpReq) {
-          // 👉 passwordEncoder.encode() 메서드를 통해 비밀번호 암호화
-          signUpReq.setPassword(passwordEncoder.encode(signUpReq.getPassword()));
-          Member member = memberRepository.save(this.dtoToEntity(signUpReq));
-          return this.entityToSignUpRes(member);
-      }
+```java
+@Configuration
+public class PasswordConfig {
+  @Bean
+  public PasswordEncoder passwordEncoder(){
+    return PasswordEncoderFactories.createDelegatingPasswordEncoder();
   }
-  ```
+}
+```
 
-- ### 인증
-- `UserDetailsService`를 구한현 Class 와 메서드의 반환 타입인 User를 구현한 Class만 있으면 된다.
-  - `UserDetailsService`
-    - 필수로 `UserDetails loadUserByUsername(String username)`를 구현해야한다.
-      - 해당 매서드가 인증을 담당한다
-      - 반환 형식은 User Class 형식이다.
-  - `User`
-    - 인증이 완료되면 반환 되어야하는 형식이다.
-    - 그대로 `new User()`를 통해 반환을 해도 괜찮다.
-      - 다만 확정성을 위해 더욱 많은 정보를 넣고 싶다면 상속을 해줘야하기에 확장한 Class를 구현해야 한다.
-    - 인증이 완료되면 `(Authentication authentication)`내 `authentication.getPrincipal()` 함수를 통해 확장한 Class의 객체에 접근이 가능하다.
-- `UserDetailsService` 구현 Class
+### 4 - 3  ) 회원 등록
+- PasswordEncoder를 사용해 **비밀번호를 encoding 후 저장** 필수 
+```java
+@Service
+@RequiredArgsConstructor
+@Log4j2
+public class MemberServiceImpl implements MemberService, UserDetailsService {
+    private final MemberRepository memberRepository;
+    private final PasswordEncoder passwordEncoder;
+    @Override
+    public SignUpRes registerMember(SignUpReq signUpReq) {
+        // 👉 passwordEncoder.encode() 메서드를 통해 비밀번호 암호화
+        signUpReq.setPassword(passwordEncoder.encode(signUpReq.getPassword()));
+        Member member = memberRepository.save(this.dtoToEntity(signUpReq));
+        return this.entityToSignUpRes(member);
+    }
+}
+```
 
-  ```java
-  public interface MemberService {
+### 4 - 4  ) 인증 Logic
+- Interface인 `UserDetailsService`를 구한현 Class 와 `UserDetails loadUserByUsername(String username)`를 **구현** 해주면 된다.
+  - 해당 매서드는 인증을 담당하며, implements 시 구현은 필수 이다.
+  - return 시  User class를 반환해도 괜찮다.
 
-    // 👉 User Class 권한 형식에 맞게 변환
-    default Collection<? extends GrantedAuthority> authorities(Set<Roles> roles){
-      return roles.stream()
-              // ⭐️ "ROLE_" 접두사를 사용하는 이유는  Spring Security가 권한을 인식하고 처리할 때 해당 권한이 역할임을 명확하게 나타내기 위한 관례입니다.
-              .map(r -> new SimpleGrantedAuthority("ROLE_"+r.name()))
-              .collect(Collectors.toSet());
+#### 4 - 4 - A  ) UserDetailService
+- Servcie class에 UserDetailsService를 **상속하여 진행**
+```java
+public interface MemberService extends UserDetailsService {
+    
+  default MemberToUserDTO entityToUserDto(Member member){
+    return new MemberToUserDTO(member.getId()
+            , member.getPassword()
+            , member.getName()
+            // 👉 권한 형식에 맞게 변경
+            , this.authorities(member.getRoles())
+            ,  member.getRoles());
+  }
+  
+  // 👉 User Class 권한 형식에 맞게 변환
+  default Collection<? extends GrantedAuthority> authorities(Set<Roles> roles){
+    return roles.stream()
+            // ⭐️ "ROLE_" 접두사를 사용하는 이유는  Spring Security가 권한을 인식하고 처리할 때 해당 권한이 역할임을 명확하게 나타내기 위한 관례입니다.
+            .map(r -> new SimpleGrantedAuthority("ROLE_"+r.name()))
+            .collect(Collectors.toSet());
+  }
+}
+```
+
+#### 4 - 4 - B  ) UserDetailServiceImpl
+```java
+@Service
+@RequiredArgsConstructor
+public class MemberServiceImpl implements MemberService, UserDetailsService {
+    private final MemberRepository memberRepository;
+
+    @Override
+    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+        // 1. userName(아이디)를 기준으로 데이터 존재 확인
+        Member member = memberRepository.findById(username)
+                .orElseThrow(()->new UsernameNotFoundException(username));
+        // 2. 존재한다면 해당 데이터를 기준으로 User객체를 생성 반환
+        //    🫵 중요 포인트는 해당 객체를 받아온 후 이후에 password 검증을 진행한다는 것이다
+        return this.entityToUserDto(member);
+    }
+}
+```
+
+#### 4 - 4 - C  ) UserDetails
+```properties
+# ✅ 참고 : public class User implements UserDetails, CredentialsContainer { /** code */ }
+```
+- `UserDetailsService` 구현 Class이다.
+- 인증이 완료되면 반환 해야하는 객체이며, `new User()`를 통해 반환을 해도 괜찮도 상관은 없다. 
+  - 다만 보편적으로 **확정성을 위해** 더욱 많은 정보를 넣고 상속 후 확장한 Class를 통해 구현
+  - 인증이 완료 후 `(Authentication authentication)` -> `authentication.getPrincipal()`를 통해 확장한 Class의 객체에 접근이 가능
+```java
+/**
+ * extends User 를 사용하는 이유는 간단하다
+ * UserDetails를 반환하는 loadUserByUsername()메서드에서
+ * - 아이디, 비밀번호, 권한 << 이렇게 3개만 있으면 User를 사용해도 되지만
+ *
+ * 그렇지 않을 경우 추가적은 정보를 갖는 경우 아래와 같이 DTO를 추가후 Super()를 통해
+ * 부모에게 필요한 생성정보를 전달 하고 나머지는 내가 필요한 정보를 들고 있기 위함이다.
+ * */
+@Data
+public class MemberToUserDTO extends User {
+    private String id;
+    private String password;
+    private String name;
+    private Set<Roles> roles;
+
+    public MemberToUserDTO(String id
+            , String password
+            , String name
+            , Collection<? extends GrantedAuthority> authorities
+            , Set<Roles> roles
+            ) {
+        super(id, password, authorities);
+        this.id = id;
+        this.password = password;
+        this.name = name;
+        this.roles = roles;
+    }
+}
+```
+
+### 4 - 5  ) Security Config 
+```properties
+# UsernamePasswordAuthenticationFilter를 사용할 경우는 위에 작성 되어 있으니 다른 방법을 사용하여 userDetailService를 주입
+```
+- 간단하게 userDetailService를 지정하여 사용 가능
+```java
+@Configuration
+@RequiredArgsConstructor
+@Log4j2
+public class SecurityConfig {
+    private final PasswordEncoder passwordEncoder;
+    private final UserService userService;
+    private final Environment env;
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
+        
+        http.userDetailsService(userService);
+        
+        return http.build();
     }
 
-    /**
-     * Entity -> User DTO
-     *
-     * @param member the member
-     * @return the member to user dto
-     */
-    default MemberToUserDTO entityToUserDto(Member member){
-      return new MemberToUserDTO(member.getId()
-              , member.getPassword()
-              , member.getName()
-              // 👉 권한 형식에 맞게 변경
-              , this.authorities(member.getRoles())
-              ,  member.getRoles());
-    }
+}
+```
 
-  }
-
-  /////////////////////////////////////////////////////////////////////////////
-
-  @Service
-  @RequiredArgsConstructor
-  @Log4j2
-  public class MemberServiceImpl implements MemberService, UserDetailsService {
-      private final MemberRepository memberRepository;
-
-      @Transactional
-      @Override
-      public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-          log.info("-----------------");
-          log.info("Service 접근 - loadUserByUsername");
-          log.info("-----------------");
-
-          // 1. userName(아이디)를 기준으로 데이터 존재 확인
-          Member member = memberRepository.findById(username)
-                  .orElseThrow(()->new UsernameNotFoundException(username));
-
-          // 2. 존재한다면 해당 데이터를 기준으로 User객체를 생성 반환
-          //    🫵 중요 포인트는 해당 객체를 받아온 후 이후에 password 검증을 진행한다는 것이다
-          return this.entityToUserDto(member);
-      }
-  }
-  ```
-
-- `User` 상속 Class
-
-  ```java
-  /**
-   * extends User 를 사용하는 이유는 간단하다
-   * UserDetails를 반환하는 loadUserByUsername()메서드에서
-   * - 아이디, 비밀번호, 권한 << 이렇게 3개만 있으면 User를 사용해도 되지만
-   *
-   * 그렇지 않을 경우 추가적은 정보를 갖는 경우 아래와 같이 DTO를 추가후 Super()를 통해
-   * 부모에게 필요한 생성정보를 전달 하고 나머지는 내가 필요한 정보를 들고 있기 위함이다.
-   * */
-  @Getter
-  @Setter
-  @ToString
-  public class MemberToUserDTO extends User {
-      private String id;
-      private String password;
-      private String name;
-      private Set<Roles> roles;
-
-      public MemberToUserDTO(String id
-              , String password
-              , String name
-              , Collection<? extends GrantedAuthority> authorities
-              , Set<Roles> roles
-              ) {
-          super(id, password, authorities);
-          this.id = id;
-          this.password = password;
-          this.name = name;
-          this.roles = roles;
-      }
-  }
-  ```
 
 ## JWT
 
