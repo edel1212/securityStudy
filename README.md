@@ -839,284 +839,251 @@ public class JwtUtil {
 }
 ```
 
-## 6 ) 로그인 - 인증 절차
-// TODO 진행 중...
+## 6 ) Jwt 인증 절차
 
-
-
+### 6 - 1 ) OncePerRequestFilter 
+- 요청에 대해 **한번만 실행하는 필터**이다. 포워딩이 발생하면 필터 체인이 다시 동작 되는데, **인증은 여러번 처리가 불필요하기에 한번만 처리를 할 수 있도록 도와주는 역할**을 험
+- Jwt에 대한 기능을 구현한 class 의존성 주입 후 `http.addFilterBefore()`메서드를 통해 `UsernamePasswordAuthenticationFilter` 필터 실행 전에 실행하도록 변경
+  - UsernamePasswordAuthenticationFilter 전에 **header 내 bearer token이 있을 경우** 해당 **토큰을 사용해서 인증**을 해버리는 것이다. 
 ```java
-/**
- * JWT 검증
- * - 각각 예외에 따라 ControllerAdvice를 사용해서 처리가 가능함
- * @param accessToken
- * @return IsValidate
- */
-public boolean validateToken(String accessToken) {
-    try {
-        Jwts.parserBuilder().setSigningKey(secret).build().parseClaimsJws(accessToken);
-        return true;
-    } catch (io.jsonwebtoken.security.SecurityException | MalformedJwtException e) {
-        log.info("Invalid JWT Token", e);
-    } catch (ExpiredJwtException e) {
-        log.info("Expired JWT Token", e);
-    } catch (UnsupportedJwtException e) {
-        log.info("Unsupported JWT Token", e);
-    } catch (IllegalArgumentException e) {
-        log.info("JWT claims string is empty.", e);
-    } // try - catch
-    return false;
+@Configuration
+@RequiredArgsConstructor
+@Log4j2
+public class SecurityConfig {
+      // Jwt 필터 추가
+    private final JwtFilter jwtFilter;
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
+       // 👉 필터 순서 번경
+        http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+        return http.build();
+    }
 }
+```
 
-/**
- * JWT Claims 추출
- * @param accessToken
- * @return JWT Claims
- */
-public Claims parseClaims(String accessToken) {
-    try {
-        return Jwts.parserBuilder()
-                .setSigningKey(secret)
-                .build()
-                .parseClaimsJws(accessToken)
-                .getBody();
-    } catch (ExpiredJwtException e) {
-        return e.getClaims();
-    }// try - catch
+### 6 - 2 ) Jwt 검증 로직
+```java
+@Log4j2
+@Component
+public class JwtUtil {
+    @Value("${jwt.expiration_time}")
+    private Long accessTokenExpTime;
+    @Value("${jwt.secret}")
+    private String secret;
+
+    /**
+     * JWT 검증
+     * - 각각 예외에 따라 ControllerAdvice를 사용해서 처리가 가능함
+     * @param accessToken
+     * @return IsValidate
+     */
+    public boolean validateToken(String accessToken) {
+        try {
+            Jwts.parserBuilder().setSigningKey(secret).build().parseClaimsJws(accessToken);
+            return true;
+        } catch (io.jsonwebtoken.security.SecurityException | MalformedJwtException e) {
+            log.info("Invalid JWT Token", e);
+        } catch (ExpiredJwtException e) {
+            log.info("Expired JWT Token", e);
+        } catch (UnsupportedJwtException e) {
+            log.info("Unsupported JWT Token", e);
+        } catch (IllegalArgumentException e) {
+            log.info("JWT claims string is empty.", e);
+        } // try - catch
+        return false;
+    }
+
+    /**
+     * JWT Claims 추출
+     * @param accessToken
+     * @return JWT Claims
+     */
+    public Claims parseClaims(String accessToken) {
+        try {
+            return Jwts.parserBuilder()
+                    .setSigningKey(secret)
+                    .build()
+                    .parseClaimsJws(accessToken)
+                    .getBody();
+        } catch (ExpiredJwtException e) {
+            return e.getClaims();
+        }// try - catch
+    }
+
+    /**
+     * JWT 값 추출
+     * @param request
+     * @return String Jwt Token 원문 값
+     */
+    public String resolveToken(HttpServletRequest request) {
+        String bearerToken = request.getHeader(AUTHORIZATION);
+        if (bearerToken == null || !bearerToken.startsWith("Bearer ")) return null;
+        return bearerToken.replaceAll("Bearer ","");
+    }
+
+
+    /**
+     * 토큰 값을 통해 Authentication 객체 생성
+     *
+     * @param accessToken the access token
+     * @return the authentication
+     */
+    public Authentication getAuthentication(String accessToken) {
+        // 1 . 토큰에서 Claims 값을 가져온다. - 내가 넣은 값이 들어있음
+        Claims claims = this.parseClaims(accessToken);
+
+        // 2 . 주입된 토큰에서 내가 넣은 값의 유무를 체크
+        if(claims.get("memberId") == null || claims.get("auth") == null) {
+            // 예외 발생 시켜 처리하자
+            throw new RuntimeException();
+        }// if
+
+        // 3 . claims에서 권한 정보 추출 후 Spring Security의 권한 형식에 맞게 변환
+        //   ⭐️ jwt에 등록된 권한은 Security자체에서 주입된 값이기에 ROLE_가 prefix로 붙어있다!
+        //      ex) ROLE_ADMIN, ROLE_USER
+        Collection<? extends GrantedAuthority> authorities =
+                Arrays.stream(claims.get("auth").toString().split(","))
+                        .map(SimpleGrantedAuthority::new)
+                        .collect(Collectors.toList());
+        // 계정ID
+        String username = claims.get("memberId").toString();
+
+        // 4 . UserDetail 객체 생성
+        UserDetails principal = new User(username, "", authorities);
+
+        // UsernamePasswordAuthenticationToken로 반환 - uerDetail 정보와 권한 추가
+        return new UsernamePasswordAuthenticationToken(principal, "", authorities);
+    }
+
+    /**
+     * AccessToken 내 Bearer 제거
+     *
+     * @param AccessToken the access token
+     * @return removeBearer
+     */
+    private String removeBearer(String AccessToken){
+        return AccessToken.replaceAll("Bearer ","");
+    }
 }
 ```
 
 
-## Jwt 인증 절차
-
-- 기존 Security Filter에서 순서를 변경해줘야한다.
-- `@Component`를 통해 Bean 스캔 대상임을 지정해준다.
-- `OncePerRequestFilter`를 상속한 Class에서 처리한다.
-  - 구현이 강제 되어있는 `doFilterInternal()`메서드에서 로직을 구현해준다.
-    - 내부에서 받아오는 `HttpServletRequest request`에서 Header에 포함되어있는 토큰값을 검증한다.
-  - 값에 이상이 없을 경우 ` SecurityContextHolder.getContext().setAuthentication(authentication);`를 통해 권한을 등록해준다.
-    - 이때 넘어어온 권한 목록(`authentication`)는 `ROLE_`형식의 prefix가 붙어있다.
-- 흐름
-
-  - `JwtUtil` 추가로직
-
-    - `"Bearer "`을 제거한 JWT 값 추출
-
-      ```java
-      @Log4j2
-      @Component
-      public class JwtUtil {
-          /**
-           * JWT 값 추출
-           * @param request
-           * @return String Jwt Token 원문 값
-           */
-          public String resolveToken(HttpServletRequest request) {
-              String bearerToken = request.getHeader(AUTHORIZATION);
-              if (bearerToken == null || !bearerToken.startsWith("Bearer ")) return null;
-              return bearerToken.replaceAll("Bearer ", "");
-          }
-      }
-      ```
-
-      - 토큰 값을 통해 Authentication 객체 생성
-
-        - ℹ️ 권한 정보는 `ROLE_ADMIN, ROLE_USER`형식으로 prefix가 붙어있다.
-
-          - 로그인 시 Security 자체 메서드에서 받아왔기 때문이다.
-
-            ```java
-            @RequestMapping(value = "/member", produces = MediaType.APPLICATION_JSON_VALUE)
-            @RequiredArgsConstructor
-            @RestController
-            @Log4j2
-            public class MemberController {
-
-                private final AuthenticationManagerBuilder authenticationManagerBuilder;
-                private final JwtUtil jwtUtil;
-
-                @PostMapping("/login")
-                public ResponseEntity login(@RequestBody LoginDTO loginDTO){
-                    log.info("------------------");
-                    log.info("Login Controller 접근");
-                    log.info("------------------");
-                    // 1. username + password 를 기반으로 Authentication 객체 생성
-                    // 이때 authentication 은 인증 여부를 확인하는 authenticated 값이 false
-                    UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(loginDTO.getId()
-                            , loginDTO.getPassword());
-
-                    /** 실제 검증 후 반환하는  authentication에는 내가 커스텀한 UserDetail정보가 들어가 있음*/
-                    // 2. 실제 검증. authenticate() 메서드를 통해 요청된 Member 에 대한 검증 진행
-                    // authenticate 메서드가 실행될 때 CustomUserDetailsService 에서 만든 loadUserByUsername 메서드 실행
-                    Authentication authentication = authenticationManagerBuilder.getObject().authenticate(authenticationToken);
-
-                    JwtToken token = jwtUtil.generateToken(authentication);
-
-                   return ResponseEntity.ok().body(token);
-                }
-
-            }
-            ```
-
-          - `Authentication` 객체 생성
-
-            ```java
-            @Log4j2
-            @Component
-            public class JwtUtil {
-                /**
-               * 토큰 값을 통해 Authentication 객체 생성
-               *
-               * @param accessToken the access token
-               * @return the authentication
-               */
-              public Authentication getAuthentication(String accessToken) {
-                  // 1 . 토큰에서 Claims 값을 가져온다. - 내가 넣은 값이 들어있음
-                  Claims claims = this.parseClaims(accessToken);
-
-                  // 2 . 주입된 토큰에서 내가 넣은 값의 유무를 체크
-                  if(claims.get("memberId") == null || claims.get("auth") == null) {
-                      // 예외 발생 시켜 처리하자
-                      throw new RuntimeException();
-                  }// if
-
-                  // 3 . claims에서 권한 정보 추출 후 Spring Security의 권한 형식에 맞게 변환
-                  //   ⭐️ jwt에 등록된 권한은 Security자체에서 주입된 값이기에 ROLE_가 prefix로 붙어있다!
-                  //      ex) ROLE_ADMIN, ROLE_USER
-                  Collection<? extends GrantedAuthority> authorities =
-                          Arrays.stream(claims.get("auth").toString().split(","))
-                                  .map(SimpleGrantedAuthority::new)
-                                  .collect(Collectors.toList());
-                  // 계정ID
-                  String username = claims.get("memberId").toString();
-
-                  // 4 . UserDetail 객체 생성
-                  UserDetails principal = new User(username, "", authorities);
-
-                  // UsernamePasswordAuthenticationToken로 반환 - uerDetail 정보와 권한 추가
-                  return new UsernamePasswordAuthenticationToken(principal, "", authorities);
-              }
-            }
-            ```
-
-  - `OncePerRequestFilter`을 상속한 Class
-    - 한 요청에 대해 한번만 실행하는 필터이다. 포워딩이 발생하면 필터 체인이 다시 동작되는데, 인증은 여러번 처리가 불필요하기에 한번만 처리를 할 수 있도록 도와주는 역할을 한다.
-    - 의존성 주입 후 `http.addFilterBefore()`메서드를 통해 `UsernamePasswordAuthenticationFilter` 필터 실행 전에 실행하도록 변경
-      ```java
-      @Configuration
-      @RequiredArgsConstructor
-      @Log4j2
-      public class SecurityConfig {
-            // Jwt 필터 추가
-          private  final JwtFilter jwtFilter;
-          @Bean
-          public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
-             // 👉 필터 순서 번경
-              http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
-              return http.build();
-          }
-      }
-      ```
-
-## 권한별 접근제어
+## 7 ) 권한별 접근제어
 
 - Security 내부 권한 확인 시 `"ROLE_"`로 앞에 prefix가 붙는다.
 - Jwt와 같은 Spring Security 내부에서 Session을 사용하지 않을 경우 권한 정보를 `Security Context` 내부에 따로 주입이 필요하다.
 - 접근 제어를 지정해 줄 경우 순서가 중요하다.
   - `anyRequest().authenticated();`의 경우 모든 요청이 권한 체크가 필요하다인데 가장 위에 적용할 경우 컴파일 에러 발생
-- 접근 제어 설정
-  - `authorizeHttpRequests()` 사용 방법
-    - 직관적으로 URL 및 HttpMethod를 지정할 수 있다.
-    - URL PATH가 바뀔 경우 번거롭게 한번 더 수정이 필요하다.
-    - 제어해야할 Path가 많아질 경우 관리가 힘들어진다.
-    - 설정 코드
-      ```java
-      @Configuration
-      @RequiredArgsConstructor
-      @Log4j2
-      public class SecurityConfig {
-          @Bean
-          public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
-              // 👉 접근 제어
-              http.authorizeHttpRequests( access ->{
-                  // 👍 인증이 되지 않은자만 허용
-                  access.requestMatchers("/signUp").anonymous();
-                  // 👍 전체 접근 허용
-                  access.requestMatchers("/all").permitAll();
-                  // 👍 hasAnyRole를 사용해서 다양한 권한으로 접근 가능
-                  access.requestMatchers("/user").hasAnyRole(Roles.USER.name(), Roles.MANAGER.name(),Roles.ADMIN.name());
-                  access.requestMatchers("/manager").hasAnyRole(Roles.MANAGER.name(),Roles.ADMIN.name());
-                  // 👍 hasRole을 사용하면 단일 권한 지정
-                  access.requestMatchers("/admin").hasRole(Roles.ADMIN.name());
-                  // ℹ️ 순서가 중요하다 최상의 경우 에러 발생
-                  //     어떠한 요청에도 검사 시작 - 로그인만 된다면 누구든 접근 가능
-                  access.anyRequest().authenticated();
-              });
-              return http.build();
-          }
-      }
-      ```
-- `@EnableMethodSecurity`를 사용한 방식
+- 접근 제어 설정 방법은 2개지가 있다 [ `authorizeHttpRequests()` 사용 방법, `@EnableMethodSecurity`를 사용 방법 ]
 
-  - Method 상단 권한 체크 메서드를 통해서 접근을 제어할 수 있다.
-  - `@PreAuthorize` 내에서 사용가능한 함수/기능들
+### 7 - 1 ) `authorizeHttpRequests()` 사용 방법 
 
-    | 함수/기능                       | 설명                                                              |
-    | ------------------------------- | ----------------------------------------------------------------- |
-    | hasRole([role])                 | 현재 사용자의 권한이 파라미터의 권한과 동일한 경우 true           |
-    | hasAnyRole([role1, role2, ...]) | 현재 사용자의 권한이 파라미터의 권한 중 하나와 일치하는 경우 true |
-    | principal                       | 사용자를 증명하는 주요 객체(User)에 직접 접근 가능                |
-    | authentication                  | SecurityContext에 있는 authentication 객체에 접근 가능            |
-    | permitAll                       | 모든 접근을 허용                                                  |
-    | denyAll                         | 모든 접근을 거부                                                  |
-    | isAnonymous()                   | 현재 사용자가 익명(비로그인) 상태인 경우 true                     |
-    | isRememberMe()                  | 현재 사용자가 RememberMe 사용자인 경우 true                       |
-    | isAuthenticated()               | 현재 사용자가 익명이 아니고 (로그인 상태인 경우) true             |
-    | isFullyAuthenticated()          | 현재 사용자가 익명이 아니고 RememberMe 사용자가 아닌 경우 true    |
+- 직관적으로 URL 및 HttpMethod를 지정할 수 있다.
+- URL PATH가 바뀔 경우 번거롭게 한번 더 수정이 필요하다.
+- 제어해야할 Path가 많아질 경우 관리가 힘들어진다.
 
-  - 예시
+### 7 - 1 - A ) Security Config
 
-  ```java
-  @RestController
-  public class AccessController {
-
-    @GetMapping("/all")
-    @PreAuthorize("permitAll()")  // 👍 권한이 있는 모두가 접근 가능
-    public ResponseEntity allAccess(){
-      return ResponseEntity.ok("All - Member Access!!");
+```java
+@Configuration
+@RequiredArgsConstructor
+@Log4j2
+public class SecurityConfig {
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
+        // 👉 접근 제어
+        http.authorizeHttpRequests( access ->{
+            // 👍 인증이 되지 않은자만 허용
+            access.requestMatchers("/signUp").anonymous();
+            // 👍 전체 접근 허용
+            access.requestMatchers("/all").permitAll();
+            // 👍 hasAnyRole를 사용해서 다양한 권한으로 접근 가능
+            access.requestMatchers("/user").hasAnyRole(Roles.USER.name(), Roles.MANAGER.name(),Roles.ADMIN.name());
+            access.requestMatchers("/manager").hasAnyRole(Roles.MANAGER.name(),Roles.ADMIN.name());
+            // 👍 hasRole을 사용하면 단일 권한 지정
+            access.requestMatchers("/admin").hasRole(Roles.ADMIN.name());
+            // ℹ️ 순서가 중요하다 최상의 경우 에러 발생
+            //     어떠한 요청에도 검사 시작 - 로그인만 된다면 누구든 접근 가능
+            access.anyRequest().authenticated();
+        });
+        return http.build();
     }
+}
+```
 
-    @GetMapping("/user")
-    public ResponseEntity userAccess(){
-      return ResponseEntity.ok("User Access!!");
-    }
+## 7 - 2 ) `@EnableMethodSecurity`를 사용 방법
 
-    @GetMapping("/manager")
-    // 👍 다양한 조건문을 사용 가능하다.
-    // @PreAuthorize("isAuthenticated() and (( returnObject.name == principal.name ) or hasRole('ROLE_ADMIN'))")
-    @PreAuthorize("hasRole('ROLE_MANAGER')")
-    public ResponseEntity managerAccess(Authentication authentication){
-      log.info("-----------------------------");
-      authentication.getAuthorities().stream().forEach(log::info);
-      log.info("-----------------------------");
-      return ResponseEntity.ok("manager Access!!");
+### 7 - 2 - A ) Security Config
+- `@EnableMethodSecurity`를 사용하여 할성화 시킴
+  - 기본적으로 prePostEnabled = true로 동작 → @PreAuthorize, @PostAuthorize 자동 활성화
+  - @Secured, @RolesAllowed를 사용하려면 명시적으로 활성화해야 함
+    - ex) `@EnableMethodSecurity(securedEnabled = true, jsr250Enabled = true)`
+```java
+@Configuration
+@EnableMethodSecurity
+public class SecurityConfig {
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
+        return http.build();
     }
+}
+```
 
-    @GetMapping("/admin")
-    @PreAuthorize("hasAnyRole('ROLE_ADMIN')")
-    public ResponseEntity adminAccess(Authentication authentication){
-      log.info("-----------------------------");
-      authentication.getAuthorities().stream().forEach(log::info);
-      log.info("-----------------------------");
-      return ResponseEntity.ok("admin Access!!");
-    }
+### 7 - 2 - B ) Controller
+- Method 상단 권한 체크 메서드를 통해서 접근을 제어할 수 있다.
+
+- `@PreAuthorize` 내에서 사용가능한 함수/기능들
+
+| 함수/기능                       | 설명                                                              |
+| ------------------------------- | ----------------------------------------------------------------- |
+| hasRole([role])                 | 현재 사용자의 권한이 파라미터의 권한과 동일한 경우 true           |
+| hasAnyRole([role1, role2, ...]) | 현재 사용자의 권한이 파라미터의 권한 중 하나와 일치하는 경우 true |
+| principal                       | 사용자를 증명하는 주요 객체(User)에 직접 접근 가능                |
+| authentication                  | SecurityContext에 있는 authentication 객체에 접근 가능            |
+| permitAll                       | 모든 접근을 허용                                                  |
+| denyAll                         | 모든 접근을 거부                                                  |
+| isAnonymous()                   | 현재 사용자가 익명(비로그인) 상태인 경우 true                     |
+| isRememberMe()                  | 현재 사용자가 RememberMe 사용자인 경우 true                       |
+| isAuthenticated()               | 현재 사용자가 익명이 아니고 (로그인 상태인 경우) true             |
+| isFullyAuthenticated()          | 현재 사용자가 익명이 아니고 RememberMe 사용자가 아닌 경우 true    |
+
+```java
+@RestController
+public class AccessController {
+
+  @GetMapping("/all")
+  @PreAuthorize("permitAll()")  // 👍 권한이 있는 모두가 접근 가능
+  public ResponseEntity allAccess(){
+    return ResponseEntity.ok("All - Member Access!!");
   }
-  ```
 
-## Refresh Token
+  @GetMapping("/user")
+  public ResponseEntity userAccess(){
+    return ResponseEntity.ok("User Access!!");
+  }
+
+  @GetMapping("/manager")
+  // 👍 다양한 조건문을 사용 가능하다.
+  // @PreAuthorize("isAuthenticated() and (( returnObject.name == principal.name ) or hasRole('ROLE_ADMIN'))")
+  @PreAuthorize("hasRole('ROLE_MANAGER')")
+  public ResponseEntity managerAccess(Authentication authentication){
+    authentication.getAuthorities().stream().forEach(log::info);
+    return ResponseEntity.ok("manager Access!!");
+  }
+
+  @GetMapping("/admin")
+  @PreAuthorize("hasAnyRole('ROLE_ADMIN')")
+  public ResponseEntity adminAccess(Authentication authentication){
+    authentication.getAuthorities().stream().forEach(log::info);
+    return ResponseEntity.ok("admin Access!!");
+  }
+}
+```
+
+## 8 ) Refresh Token
 
 - 사용자의 Access Token이 만료된 요청인 경우 새로운 Access Token을 발급해주는 토큰이다.
 - 흐름
-
   - 1 . Client : 로그인
   - 2 . Server : 유효한 자격 증명을 검사 후 `Access Token`과 `Refresh Token` 발급
     - Refresh Token 생성 과 동시에 DB에 저장 ( `Access Token`의 유효 시간이 짧음으로 자주 접근이 예상 `Redis`를 추천 )
@@ -1128,173 +1095,169 @@ public Claims parseClaims(String accessToken) {
     - ℹ️ ( 인증 완료 경우 ) : 새로운 `Access Token` 발급
   - 7 . Client : **2번** 부터 다시 **반복**
 
-- ### Redis 적용
+### 8 - 1 ) Redis 적용
 
-  - Dependencies 적용
-
-    ```groovy
-    dependencies {
-        // Redis
-        implementation 'org.springframework.boot:spring-boot-starter-data-redis'
-
-    }
-    ```
-
-  - Application 설정
-    ```properties
-    spring:
-    ############################
-    ## Redis Setting
-    # docker Set
-    # docker run -d --name security-redies-db -p 6379:6379 redis --requirepass "123"
-    ############################
-      data:
-        redis:
-          host: localhost
-          port: 6379
-          password: 123
-    ```
-  - Redis 설정
-
-    ```java
-    @Configuration
-    /**
-     * ℹ️ 필수 설정
-     * - Redis 데이터베이스와 상호 작용할 수 있는 구현체를 생성합니다.
-     * - Redis 리포지토리를 활성화하면, Spring IoC 컨테이너가 관련된 빈을 생성하고 관리합니다.
-     */
-    @EnableRedisRepositories
-    public class RedisConfig {
-        @Value("${spring.data.redis.host}")
-        private String redisHost;
-
-        @Value("${spring.data.redis.port}")
-        private int redisPort;
-
-        @Value("${spring.data.redis.password}")
-        private String redisPassword;
-
-        @Bean
-        public RedisConnectionFactory redisConnectionFactory() {
-            // 독립형 Redis 인스턴스에 대한 연결 설정을 위한 인스턴스 생성
-            RedisStandaloneConfiguration redisStandaloneConfiguration = new RedisStandaloneConfiguration();
-            // 호스트 주소 설정
-            redisStandaloneConfiguration.setHostName(redisHost);
-            // 포트번호 설정
-            redisStandaloneConfiguration.setPort(redisPort);
-            // 패스워드 설정
-            redisStandaloneConfiguration.setPassword(redisPassword);
-            // Lettuce Redis 클라이언트를 사용하여 Redis에 연결하는 데 사용됩니다.
-            return new LettuceConnectionFactory(redisStandaloneConfiguration);
-        }
-
-        @Bean
-        public RedisTemplate<String, String> redisTemplate() {
-            // 사용할 RedisTemplate 객체 생성
-            RedisTemplate<String, String> redisTemplate = new RedisTemplate<>();
-            // RedisTemplate이 사용할 Connection Factory를 설정합니다. 앞서 정의한 Redis 연결 팩토리를 생성하는 메서드를 적용
-            redisTemplate.setConnectionFactory(this.redisConnectionFactory());
-            // Key Serializer를 설정합니다. 문자열을 직렬화합니다.
-            redisTemplate.setKeySerializer(new StringRedisSerializer());
-            // Value Serializer를 설정합니다. 문자열을 직렬화합니다
-            redisTemplate.setValueSerializer(new StringRedisSerializer());
-            return redisTemplate;
-        }
-    }
-    ```
-
-  - 흐름 (서버 관점)
-    - 로그인 요청이 들어옴
-      - 인증 로직 성공
-      - `Access Token` 및 `Refresh Token` 발급
-      - `Refresh Token` Redis에 저장 ( 유효시간을 Reids 데이터 유지 시간과 같게 저장하자 )
-        - Key 값은 계정ID로 지정
-    - 새로운 토큰 발급 요청이 들어옴
-      - `Access Token` 과 `Refresh Token`을 Parameter로 받음
-        - `Access Token`울 받는 이유는 해당 Token 내부의 계정 정보를 활용 하기 위함
-          - Parameter로 계정 정보를 받는거 자체가 안전성 측면에서 떨어진다 판단
-      - `Refresh Token`의 만료 기간 확인
-      - `Refresh Token`의 Redis에 저장 유무 및 같은 값인지 확인 ( 교차 검증을 통해 안정성 향상 )
-      - 이상이 없을 경우 `Access Token`를 활용해서 새로운 `Access Token` 와 `Refresh Token` 발급
-      - `Refresh Token` Redis에 저장 ( 유효시간을 Reids 데이터 유지 시간과 같게 저장하자 )
-        - Key 값은 계정ID로 지정
-  - 사용 코드
-
-    - 로그인
-
-      ```java
-      public class MemberController {
-        // Spring Security Manager
-        private final AuthenticationManagerBuilder authenticationManagerBuilder;
-        // Jwt Util
-        private final JwtUtil jwtUtil;
-        // ℹ️ Redis 의존성 주입
-        private final RedisTemplate<String, String> redisTemplate;
-
-        @PostMapping("/login")
-        public ResponseEntity login(@RequestBody LoginDTO loginDTO){
-          UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(loginDTO.getId()
-                  , loginDTO.getPassword());
-          Authentication authentication = authenticationManagerBuilder.getObject().authenticate(authenticationToken);
-          JwtToken token = jwtUtil.generateToken(authentication);
-
-          // ℹ️ Redis사용을 위한 객체 생성
-          ValueOperations<String, String> valueOperations = redisTemplate.opsForValue();
-          // ℹ️ set()함수를 사용해서 (Key, Value, 적용 시간, 시간방식) 형태로 저장
-          valueOperations.set( authentication.getName(), token.getRefreshToken(), 300L, TimeUnit.SECONDS);
-          return ResponseEntity.ok().body(token);
-        }
-      }
-      ```
-
-    - 신규 토큰 발급
-
-      ```java
-      public class MemberController {
-          // Jwt Util
-          private final JwtUtil jwtUtil;
-          // ℹ️ Redis 의존성 주입
-          private final RedisTemplate<String, String> redisTemplate;
-
-          @PostMapping("/new-token")
-          public ResponseEntity newToken(@RequestBody NewTokenReq newTokenReq){
-            boolean validationCheck = jwtUtil.validateToken(newTokenReq.getRefreshToken());
-            if(!validationCheck) return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("잘못된 토큰입니다");
-            // 이전 토큰에서 Claims 값 추출
-            Claims oldClaims =  jwtUtil.parseClaims(newTokenReq.getOldAccessToken());
-            // 계정Id 추출
-            String memberId = oldClaims.get("memberId").toString();
-            // ℹ️ Redis 내부에서 저장된 Refresh Token 추출 - 계정 정보로 저장된 Refresh Token 추출
-            String refreshToken = redisTemplate.opsForValue().get(memberId);
-            // 값이 같은지 확인 후 예외 처리
-            if(!newTokenReq.getRefreshToken().equals(refreshToken))
-              return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("재로그인 필요");
-            // ℹ️ 만료된 Access Token의 계정정보를 사용해서 새로 토큰생성
-            JwtToken newJwtToken = jwtUtil.generateNewToken(oldClaims);
-            // ℹ️ Redies에 Refresh Token 정보 업데이트
-            ValueOperations<String, String> valueOperations = redisTemplate.opsForValue();
-            valueOperations.set( memberId, newJwtToken.getRefreshToken(), 300L, TimeUnit.SECONDS);
-
-            return ResponseEntity.ok(newJwtToken);
-          }
-      }
-      ```
-
-## 소셜 로그인 (Google) - 기본 설정 대로 사용
-
-### dependencies 적용
+#### 8 - 1 - A ) build.gradle
 
 ```groovy
-  // OAuth2 client 추가
-	implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
+dependencies {
+    // Redis
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+}
 ```
 
-### application 설정
-
-- Google에서 해당 로그인 API사용 승인을 받아야한다.
-  - 승인 후 알려주는 clientId 와 sercrtId를 적용해주자
-
+#### 8 - 1 - B ) application.yml
 ```properties
+spring:
+############################
+## Redis Setting
+# docker Set
+# docker run -d --name security-redies-db -p 6379:6379 redis --requirepass "123"
+############################
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: 123
+```
+
+#### 8 - 1 - C ) Redis Config
+
+```java
+@Configuration
+/**
+ * ℹ️ 필수 설정
+ * - Redis 데이터베이스와 상호 작용할 수 있는 구현체를 생성합니다.
+ * - Redis 리포지토리를 활성화하면, Spring IoC 컨테이너가 관련된 빈을 생성하고 관리합니다.
+ */
+@EnableRedisRepositories
+public class RedisConfig {
+    @Value("${spring.data.redis.host}")
+    private String redisHost;
+
+    @Value("${spring.data.redis.port}")
+    private int redisPort;
+
+    @Value("${spring.data.redis.password}")
+    private String redisPassword;
+
+    @Bean
+    public RedisConnectionFactory redisConnectionFactory() {
+        // 독립형 Redis 인스턴스에 대한 연결 설정을 위한 인스턴스 생성
+        RedisStandaloneConfiguration redisStandaloneConfiguration = new RedisStandaloneConfiguration();
+        // 호스트 주소 설정
+        redisStandaloneConfiguration.setHostName(redisHost);
+        // 포트번호 설정
+        redisStandaloneConfiguration.setPort(redisPort);
+        // 패스워드 설정
+        redisStandaloneConfiguration.setPassword(redisPassword);
+        // Lettuce Redis 클라이언트를 사용하여 Redis에 연결하는 데 사용됩니다.
+        return new LettuceConnectionFactory(redisStandaloneConfiguration);
+    }
+
+    @Bean
+    public RedisTemplate<String, String> redisTemplate() {
+        // 사용할 RedisTemplate 객체 생성
+        RedisTemplate<String, String> redisTemplate = new RedisTemplate<>();
+        // RedisTemplate이 사용할 Connection Factory를 설정합니다. 앞서 정의한 Redis 연결 팩토리를 생성하는 메서드를 적용
+        redisTemplate.setConnectionFactory(this.redisConnectionFactory());
+        // Key Serializer를 설정합니다. 문자열을 직렬화합니다.
+        redisTemplate.setKeySerializer(new StringRedisSerializer());
+        // Value Serializer를 설정합니다. 문자열을 직렬화합니다
+        redisTemplate.setValueSerializer(new StringRedisSerializer());
+        return redisTemplate;
+    }
+}
+```
+
+### 8 - 2 ) Redis를 사용한 Refresh Token 흐름 ( 서버 관점 )
+- 1 . 로그인 요청이 들어옴
+- 인증 성공 시ss
+- `Access Token` 및 `Refresh Token` 발급
+- `Refresh Token` Redis에 저장 **( 유효시간을 Reids 데이터 유지 시간과 같게 저장 )**
+    - Key 값은 계정ID로 지정
+- 2 . 새로운 토큰 발급 요청이 들어옴
+- `Access Token` 과 `Refresh Token`을 Parameter로 받음
+    - `Access Token`울 받는 이유는 해당 Token **내부의 계정 정보를 활용 하기 위함**
+      - Parameter로 계정 정보를 받는거 자체가 안전성 측면에서 떨어진다 판단
+- `Refresh Token`의 만료 기간 확인
+- `Refresh Token`의 Redis에 저장 유무 및 같은 값인지 확인 ( 교차 검증을 통해 안정성 향상 )
+- 이상이 없을 경우 `Access Token`를 활용해서 새로운 `Access Token` 와 `Refresh Token` 발급
+- `Refresh Token` Redis에 저장 ( 유효시간을 Reids 데이터 유지 시간과 같게 저장하자 )
+    - Key 값은 계정ID로 지정
+
+### 8 - 2 - A ) Controller - 로그인
+- 토큰 생성
+```java
+public class MemberController {
+  // Spring Security Manager
+  private final AuthenticationManagerBuilder authenticationManagerBuilder;
+  // Jwt Util
+  private final JwtUtil jwtUtil;
+  // ℹ️ Redis 의존성 주입
+  private final RedisTemplate<String, String> redisTemplate;
+
+  @PostMapping("/login")
+  public ResponseEntity login(@RequestBody LoginDTO loginDTO){
+    UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(loginDTO.getId()
+            , loginDTO.getPassword());
+    Authentication authentication = authenticationManagerBuilder.getObject().authenticate(authenticationToken);
+    JwtToken token = jwtUtil.generateToken(authentication);
+
+    // ℹ️ Redis사용을 위한 객체 생성
+    ValueOperations<String, String> valueOperations = redisTemplate.opsForValue();
+    // ℹ️ set()함수를 사용해서 (Key, Value, 적용 시간, 시간방식) 형태로 저장
+    valueOperations.set( authentication.getName(), token.getRefreshToken(), 300L, TimeUnit.SECONDS);
+    return ResponseEntity.ok().body(token);
+  }
+}
+```
+### 8 - 2 - B ) 신규 토큰 발급 - Refresh token 활용
+
+```java
+public class MemberController {
+    // Jwt Util
+    private final JwtUtil jwtUtil;
+    // ℹ️ Redis 의존성 주입
+    private final RedisTemplate<String, String> redisTemplate;
+
+    @PostMapping("/new-token")
+    public ResponseEntity newToken(@RequestBody NewTokenReq newTokenReq){
+      boolean validationCheck = jwtUtil.validateToken(newTokenReq.getRefreshToken());
+      if(!validationCheck) return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("잘못된 토큰입니다");
+      // 이전 토큰에서 Claims 값 추출
+      Claims oldClaims =  jwtUtil.parseClaims(newTokenReq.getOldAccessToken());
+      // 계정Id 추출
+      String memberId = oldClaims.get("memberId").toString();
+      // ℹ️ Redis 내부에서 저장된 Refresh Token 추출 - 계정 정보로 저장된 Refresh Token 추출
+      String refreshToken = redisTemplate.opsForValue().get(memberId);
+      // 값이 같은지 확인 후 예외 처리
+      if(!newTokenReq.getRefreshToken().equals(refreshToken))
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("재로그인 필요");
+      // ℹ️ 만료된 Access Token의 계정정보를 사용해서 새로 토큰생성
+      JwtToken newJwtToken = jwtUtil.generateNewToken(oldClaims);
+      // ℹ️ Redies에 Refresh Token 정보 업데이트
+      ValueOperations<String, String> valueOperations = redisTemplate.opsForValue();
+      valueOperations.set( memberId, newJwtToken.getRefreshToken(), 300L, TimeUnit.SECONDS);
+
+      return ResponseEntity.ok(newJwtToken);
+    }
+}
+```
+
+## 9 ) 소셜 로그인 (Google) - 기본 설정 대로 사용
+
+### 9 - 1 ) build.gradle
+
+```groovy
+// OAuth2 client 추가
+implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
+```
+
+### 9 - 2 ) application.yml
+- ⭐️ 필수 ) Google에서 해당 로그인 API사용 승인을 받아야 함
+  - 승인 후 알려주는 clientId 와 sercrtId를 적용
+```yaml
 spring:
   # yml 구조를 잘 보자 .. spring 아래의 계층으로 security가 들어갔어야 했으나 복붙으로 인한 이슈로 삽질..
   security:
@@ -1309,13 +1272,11 @@ spring:
               - profile
 ```
 
-### Security Config 설정
-
+### 9 - 3 ) Security Config
 - `oauth2Login()`적용을 해주지 않으면 접근이 불가능하다.
   - `{{도메인}}/oauth2/authorization/google`으로 접근하면 자동으로 Google 로그인 연결 페이지로 이동 된다.
   - 승인된 리디렉션으로 `{{도메인}}/login/oauth2/code/google`을 추가해 주자!
     - 기본 설정 그대로 사용하면 해당 Path 정보로 이동하기 떄문이다.
-
 ```java
 @Configuration
 @RequiredArgsConstructor
@@ -1326,27 +1287,27 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
         // ℹ️ Google Login 가능 설정
         http.oauth2Login(Customizer.withDefaults());
-
-        return http.build();
-    }
+     return http.build();
+   }
 }
 ```
 
-### DefaultOAuth2UserService 구현
-
-- 로그인에 접근할 경우 해당 로그인에 대한 정보를 알 수있다.
-  ```console
-  Key :: sub ,  Value ::114903903503988787
-  Key :: name ,  Value ::유정호
-  Key :: given_name ,  Value :: lastName
-  Key :: family_name ,  Value :: firstName
-  Key :: picture ,  Value :: -
-  Key :: email ,  Value ::emailAddress
-  Key :: email_verified ,  Value ::true
-  Key :: locale ,  Value ::ko
-  ```
-- Interface를 구현한게 아닌 상속을 통한 구현이므로 따로 Security에 설정해 줄 필요가 없다.
-  - 바로 적용 된다.
+### 9 - 4 ) DefaultOAuth2UserService
+- OAuth2 소셜 로그인 사용자 정보를 로드하는 서비스 역할을 진행
+  - Spring Security에서 제공하는 DefaultOAuth2UserService를 상속받아 OAuth2 로그인 시 사용자 정보를 가져오는 역할을 합니다.
+  - OAutg2 로그인이 성공했을 경우 해당 class의 로직이 실행 된다.
+- DefaultOAuth2UserService는 Interface가 아니기에 상속을 통한 구현을 진행 **따로 Security에 설정해 줄 필요가 없다.**
+- 로그인에 접근할 경우 해당 로그인에 대한 정보를 알 수 있다.
+```console
+Key :: sub ,  Value ::114903903503988787
+Key :: name ,  Value ::유정호
+Key :: given_name ,  Value :: lastName
+Key :: family_name ,  Value :: firstName
+Key :: picture ,  Value :: -
+Key :: email ,  Value ::emailAddress
+Key :: email_verified ,  Value ::true
+Key :: locale ,  Value ::ko
+```
 
 ```java
 /**
@@ -1382,9 +1343,9 @@ public class OAuth2UserDetailsService extends DefaultOAuth2UserService {
 }
 ```
 
-### OAuth Success Handler 구현
+### 9 - 5 ) Custom OAuth Success Handler 구현
 
-- `AuthenticationSuccessHandler`구현 Class
+#### 9 - 5 - A ) Custom AuthenticationSuccessHandler Class
 
 ```java
 @Log4j2
@@ -1404,7 +1365,7 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler {
 }
 ```
 
-- `Security Config` 적용
+#### 9 - 5 - B ) Security Config
 
 ```java
 @Configuration
@@ -1426,12 +1387,11 @@ public class SecurityConfig {
 }
 ```
 
-## 소셜 로그인 (Google) - API 방식 사용
+## 10 ) 소셜 로그인 (Google) - API 방식 사용
 
 - Jwt Token을 사용하여 인증 처리할 경우 일반적인 OAuth 로그인 방식으로는 사용이 불가능하기에 API 방식으로 사용한다.
 
-### 흐름
-
+### 10 - 1 ) 흐름
 - [Client] 지정 URL로 소셜 요청
 - [Server] 서버에 저장된 `scope`,`client_id`,`redirect_uri`를 통해 URI를 만들어 서드파티(Google)로 `sendRedirect()` 시킴
   - 해당 리디렉션 URI는 Google에 등록되어 있어야 한다.
@@ -1443,127 +1403,127 @@ public class SecurityConfig {
 - [Google] 토큰 검증 후 데이터 반환
 - [Server] 해당 인증 정보를 통해 신규 가입 혹은 해당 서버에서 사용할 Token 발행
 
-### Redirect 반환
+
+#### 10 - 1 - A ) Redirect 반환 받을 Controller
 
 - 소셜 인증을 요청을 받을 Controller
 
-  ```java
-  @RestController
-  @RequiredArgsConstructor
-  @Log4j2
-  @RequestMapping("/app/accounts")
-  public class SocialController {
+```java
+@RestController
+@RequiredArgsConstructor
+@Log4j2
+@RequestMapping("/app/accounts")
+public class SocialController {
 
-      private final OAuthService oAuthService;
+    private final OAuthService oAuthService;
 
-      @GetMapping("/auth/{type}")
-      public void socialLoginRedirect(@PathVariable String type) throws IOException {
-          log.info("-----------");
-          log.info("socialType :::" + type);
-          log.info("-----------");
-          oAuthService.request(type);
-      }
-  }
-  ```
+    @GetMapping("/auth/{type}")
+    public void socialLoginRedirect(@PathVariable String type) throws IOException {
+        log.info("-----------");
+        log.info("socialType :::" + type);
+        log.info("-----------");
+        oAuthService.request(type);
+    }
+}
+```
 
-- 소셜 Type에 맞게 리다이렉트를 시켜줄 Service
+#### 10 - 1 - B ) Social Type에 맞게 리다이렉트를 시켜줄 Service
+- socialLoginRedirect에서 전달 받은 값을 사용하여 로직 진행
+- `HttpServletResponse`를 의존성 주입을 통해 리다이렉션 메서드를 사용
 
-  - `HttpServletResponse`를 의존성 주입을 통해 리다이렉션 메서드를 사용
+```java
+@Service
+@RequiredArgsConstructor
+public class OAuthService {
+    private final GoogleOauth googleOauth;
+    private final HttpServletResponse response;
 
-  ```java
-  @Service
-  @RequiredArgsConstructor
-  public class OAuthService {
-      private final GoogleOauth googleOauth;
-      private final HttpServletResponse response;
+    public void request(String type) throws IOException {
+        // 👉 Redirection 시킬 URL
+        String redirectURL;
+        // 👉 Social enum 변환
+        SocialType socialType = SocialType.valueOf(type.toUpperCase());
+        switch (socialType){
+            case GOOGLE:
+                // 👉 리다이렉트 시킬 URL을 생성
+                redirectURL = googleOauth.getOauthRedirectURL();
+                break;
+            default:
+                throw new IllegalArgumentException("알 수 없는 소셜 로그인 형식입니다.");
+        }// switch
+        response.sendRedirect(redirectURL);
+    }
+}
+```
 
-      public void request(String type) throws IOException {
-          // 👉 Redirection 시킬 URL
-          String redirectURL;
-          // 👉 Social enum 변환
-          SocialType socialType = SocialType.valueOf(type.toUpperCase());
-          switch (socialType){
-              case GOOGLE:
-                  // 👉 리다이렉트 시킬 URL을 생성
-                  redirectURL = googleOauth.getOauthRedirectURL();
-                  break;
-              default:
-                  throw new IllegalArgumentException("알 수 없는 소셜 로그인 형식입니다.");
-          }// switch
-          response.sendRedirect(redirectURL);
-      }
-  }
-  ```
+#### 10 - 1 - C ) Social 구분 별 리디렉션 URL을 만들 메서드를 강제할 Interface
+- 필수로 필요한 Interfacer는 아니지만, **확장성을 위해서 Interface를 분리해서 사용**
 
-- 각각 Social 리디렉션 URL을 만들 메서드를 강제할 Interface
+```java
+public interface SocialOAuth {
+    /**
+     * 각 소셜 로그인 페이지로 redirect 할 URL build
+     * 사용자로부터 로그인 요청을 받아 소셜 로그인 서버 인증용 코드 요청
+     */
+    String getOauthRedirectURL();
+}
+```
 
-  - 확장성을 위해서 Interface를 분리해서 사용한다.
+#### 10 - 1 - B ) 소셜 형식에 맞는 요청 class
+- SocialOAuth를 implements 하여`getOauthRedirectURL()`를 구현
+- 내가 사용하려는 **소셜의 api 형식에 맞는 값을 구현하여 요청**을 보내야한다. ( 예제에서는 Google로 진행 )
 
-  ```java
-  public interface SocialOAuth {
-      /**
-       * 각 소셜 로그인 페이지로 redirect 할 URL build
-       * 사용자로부터 로그인 요청을 받아 소셜 로그인 서버 인증용 코드 요청
-       */
-      String getOauthRedirectURL();
-  }
-  ```
+```java
+@Component
+@Log4j2
+@RequiredArgsConstructor
+public class GoogleOauth implements SocialOAuth{
+    // https://accounts.google.com/o/oauth2/v2/auth
+    @Value("${spring.OAuth2.google.url}")
+    private String GOOGLE_SNS_LOGIN_URL;
+    // 인증 ID
+    @Value("${spring.OAuth2.google.client-id}")
+    private String GOOGLE_SNS_CLIENT_ID;
+    // 지정한 리디렉션 URL
+    @Value("${spring.OAuth2.google.callback-url}")
+    private String GOOGLE_SNS_CALLBACK_URL;
+    // scope는 아래처럼 공백으로 되어 URL 에서 `%20`로 붙어서 처리된다.
+    @Value("${spring.OAuth2.google.scope}")
+    private String GOOGLE_DATA_ACCESS_SCOPE;
 
-- `getOauthRedirectURL()`를 구현할 Class
+    @Override
+    public String getOauthRedirectURL() {
+        // 👉 파라미터 정의
+        Map<String, String> params = new HashMap<>();
+        params.put("scope"          , GOOGLE_DATA_ACCESS_SCOPE);
+        params.put("response_type"  , "code");
+        params.put("client_id"      , GOOGLE_SNS_CLIENT_ID);
+        params.put("redirect_uri"   , GOOGLE_SNS_CALLBACK_URL);
 
-  - `application`의 값을 불러와서 사용
+        // 👉 파라미터를 URL 형식으로 변경
+        String parameterString = params.entrySet()
+                .stream()
+                .map(x->x.getKey()+"="+x.getValue())
+                .collect(Collectors.joining("&"));
 
-  ```java
-  @Component
-  @Log4j2
-  @RequiredArgsConstructor
-  public class GoogleOauth implements SocialOAuth{
-      // https://accounts.google.com/o/oauth2/v2/auth
-      @Value("${spring.OAuth2.google.url}")
-      private String GOOGLE_SNS_LOGIN_URL;
-      // 인증 ID
-      @Value("${spring.OAuth2.google.client-id}")
-      private String GOOGLE_SNS_CLIENT_ID;
-      // 지정한 리디렉션 URL
-      @Value("${spring.OAuth2.google.callback-url}")
-      private String GOOGLE_SNS_CALLBACK_URL;
-      // scope는 아래처럼 공백으로 되어 URL 에서 `%20`로 붙어서 처리된다.
-      @Value("${spring.OAuth2.google.scope}")
-      private String GOOGLE_DATA_ACCESS_SCOPE;
+        // 👉 리디렉션시킬 URL에 파라미터 추가
+        String redirectURL = GOOGLE_SNS_LOGIN_URL + "?" + parameterString;
+        /***
+         * https://accounts.google.com/o/oauth2/v2/auth
+         * ?scope=https://www.googleapis.com/auth/userinfo.email
+         * %20https://www.googleapis.com/auth/userinfo.profile&response_type=code
+         * &redirect_uri=http://localhost:8080/app/accounts/auth/google/callback
+         * &client_id=824915807954-ba1vkfj4aec6bgiestgnc0lqrbo0rgg3.apps.googleusercontent.com
+         * **/
+        log.info("-------------------");
+        log.info("redirectURL = " + redirectURL);
+        log.info("-------------------");
+        return redirectURL;
+    }
+}
+```
 
-      @Override
-      public String getOauthRedirectURL() {
-          // 👉 파라미터 정의
-          Map<String, String> params = new HashMap<>();
-          params.put("scope"          , GOOGLE_DATA_ACCESS_SCOPE);
-          params.put("response_type"  , "code");
-          params.put("client_id"      , GOOGLE_SNS_CLIENT_ID);
-          params.put("redirect_uri"   , GOOGLE_SNS_CALLBACK_URL);
-
-          // 👉 파라미터를 URL 형식으로 변경
-          String parameterString = params.entrySet()
-                  .stream()
-                  .map(x->x.getKey()+"="+x.getValue())
-                  .collect(Collectors.joining("&"));
-
-          // 👉 리디렉션시킬 URL에 파라미터 추가
-          String redirectURL = GOOGLE_SNS_LOGIN_URL + "?" + parameterString;
-          /***
-           * https://accounts.google.com/o/oauth2/v2/auth
-           * ?scope=https://www.googleapis.com/auth/userinfo.email
-           * %20https://www.googleapis.com/auth/userinfo.profile&response_type=code
-           * &redirect_uri=http://localhost:8080/app/accounts/auth/google/callback
-           * &client_id=824915807954-ba1vkfj4aec6bgiestgnc0lqrbo0rgg3.apps.googleusercontent.com
-           * **/
-          log.info("-------------------");
-          log.info("redirectURL = " + redirectURL);
-          log.info("-------------------");
-          return redirectURL;
-      }
-  }
-  ```
-
-### 인증 확인 후 로직
+### 10 - 2 ) 인증 확인 후 로직
 
 ```properties
 #- Google에서 인증이 완료되면 지정한 `redirect`로 응답을 보낸다.
@@ -1571,31 +1531,31 @@ public class SecurityConfig {
 #- 토큰 발급 또는 회원가입 로직 등 다양하게 구현이 가능하다.
 ```
 
-- 인증 완료 후 리디렉션을 받을 Controller
+### 10 - 2 - A ) 인증 완료 후 리디렉션을 받을 Controller
 
-  - Google 자체의 회원 검증 후 코드를 반환 해줌
+- Google 자체의 회원 검증 후 내가 지정했던 callback url로 코드를 반환 해주면 받을 서버의 Controller Path를 지정 해주는 것임
 
-  ```java
-  @RestController
-  @RequiredArgsConstructor
-  @Log4j2
-  @RequestMapping("/app/accounts")
-  public class SocialController {
+```java
+@RestController
+@RequiredArgsConstructor
+@Log4j2
+@RequestMapping("/app/accounts")
+public class SocialController {
 
-      private final OAuthService oAuthService;
+    private final OAuthService oAuthService;
 
-      @ResponseBody
-      @GetMapping(value = "/auth/{type}/callback")
-      public ResponseEntity<GetSocialOAuthRes> callback ( @PathVariable String type
-              , @RequestParam String code) throws Exception{
-          log.info(">> 소셜 로그인 API 서버로부터 받은 code :"+ code);
-          return ResponseEntity.ok(oAuthService.oAuthLogin(type, code));
-      }
+    @ResponseBody
+    @GetMapping(value = "/auth/{type}/callback")
+    public ResponseEntity<GetSocialOAuthRes> callback ( @PathVariable String type
+            , @RequestParam String code) throws Exception{
+        log.info(">> 소셜 로그인 API 서버로부터 받은 code :"+ code);
+        return ResponseEntity.ok(oAuthService.oAuthLogin(type, code));
+    }
 
-  }
-  ```
+}
+```
 
-- 소셜 로그인 비즈니스로직 Service
+### 10 - 3 ) 소셜 로그인 비즈니스로직 Service
 
 ```java
 @Service
@@ -1605,7 +1565,6 @@ public class OAuthService {
   private final GoogleOauth googleOauth;
 
   public JwtToken oAuthLogin(String type, String code) throws IOException {
-   public JwtToken oAuthLogin(String type, String code) throws IOException {
         // 👉 Social enum 변환
         SocialType socialType = SocialType.valueOf(type.toUpperCase());
         switch (socialType) {
@@ -1635,8 +1594,9 @@ public class OAuthService {
 }
 ```
 
-- Google과 연계 Class
-  - 필요한 정보를 요청하는 URL은 공식 문서에서 확인이 가능하다.
+### 10 - 4 ) Google과 연계 가능한 기능
+
+- 필요한 정보를 요청하는 URL은 공식 문서에서 확인이 가능하다.
 
 ```java
 @Component
@@ -1703,7 +1663,6 @@ public class GoogleOauth implements SocialOAuth{
      *
      * @param oAuthToken the o auth token
      * @return the google user
-     * @throws JsonProcessingException the json processing exception
      */
     public GoogleUser requestUserInfo(GoogleOAuthToken oAuthToken)  throws JsonProcessingException{
         // ℹ️ 회원정보 요청 URL - 공식문서 확인 [ AccessToken 필요 ]
