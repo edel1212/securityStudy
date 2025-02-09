@@ -627,40 +627,146 @@ public class SecurityConfig {
 ```
 
 
-## JWT
+## 5 ) JWT
 
-- Dependencies
-
+### 5 - 1 )  build.gradle
+- api, impl, jackson 3개 모두가 필요하다. 서로가 서로를 사용하는 개념임
 ```groovy
 dependencies {
-	//Jwt
-	implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
-	implementation 'io.jsonwebtoken:jjwt-impl:0.11.5'
-	implementation 'io.jsonwebtoken:jjwt-jackson:0.11.5'
+    // Jwt https://mvnrepository.com/artifact/io.jsonwebtoken/jjwt-api
+    implementation group: 'io.jsonwebtoken', name: 'jjwt-api', version: '0.12.6'
+    runtimeOnly group: 'io.jsonwebtoken', name: 'jjwt-impl', version: '0.12.6'
+    runtimeOnly group: 'io.jsonwebtoken', name: 'jjwt-jackson', version: '0.12.6'
 }
 ```
 
-- Setting
+### 5 - 2 )  application.yml
 
 ```properties
-# application.yml
-############################
-##Jwt Setting
-############################
 jwt:
     # Token 만료 시간 - 다양한 방식으로 커스텀 가능하다 날짜 기준으로 계산 하려면 날짜로 하고 비즈니스로직에서 계산 등등
-    # Ex)  {expirationDays} * 24 * 60 * 60;
-    expiration_time: 60000
+    # Ex)  {expirationDays} * 60(초) * 60(분) * 24(시간) * 1000;  [ 하루 ]
+    expiration_time: 86400000
     # 사용할 암호 - 알려지면 안되니 실제 사용 시에는 암호화해서 넣어주자
     secret: VlwEyVBsYt9V7zq57TejMnVUyzblYcfPQye08f7MGVA9XkHa
 ```
 
-- ### Jwt Business Logic
-- `@Value("${jwt.expiration_time}")`를 통해 properties의 값을 읽어 사용한다.
-- `@Component`를 통해 Bean 스캔 대상임을 지정해준다.
-- 토큰 생성 시 파라미터를 `(Authentication authentication)`로 받는 이유는 확정성 떄문이다.
-  - userDetailServer를 잘 구현했다면 커스텀한 인증 정보가 다 들어있기 때문이다.
+### 5 - 3 )  Jwt Token 생성
+- 로그인 성공 방식에 따른 방법을 2가지로 나눠서 설명 함 [ successfulAuthentication() 사용 시, Controller를 통해 로그인 시  ]
 
+### 5 - 3 - A )  successfulAuthentication() 사용 시
+
+#### ℹ️ Security Config
+- 상단의 UsernamePasswordAuthenticationFilter 설정과 차이점은  UserService 와 Environment를 주입 받아 사용한 다는 점이다.
+```java
+@Configuration
+@RequiredArgsConstructor
+public class SecurityConfig {
+  private final PasswordEncoder passwordEncoder;
+  private final UserService userService;
+  private final Environment env;
+
+  @Bean
+  public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
+              AuthenticationManagerBuilder authenticationManagerBuilder =
+              http.getSharedObject(AuthenticationManagerBuilder.class);
+              authenticationManagerBuilder.userDetailsService(userService).passwordEncoder(passwordEncoder);
+              AuthenticationManager authenticationManager = authenticationManagerBuilder.build();
+              http.authenticationManager(authenticationManager);
+              http.addFilter(this.getAuthenticationFilter(authenticationManager));
+      return http.build();
+    }
+
+  private AuthenticationFilter getAuthenticationFilter(AuthenticationManager authenticationManager){
+      return new AuthenticationFilter(authenticationManager, userService, env);
+    }
+}
+
+```
+#### ℹ️ Custom UsernamePasswordAuthenticationFilter   
+- Jwts를 사용하여 토큰을 생성하며 필요한 내용을 builder pattern 방식으로 주입하여 생성 가능
+```java
+@Log4j2
+public class AuthenticationFilter extends UsernamePasswordAuthenticationFilter {
+    private final UserService userService;
+    private final Environment env;
+
+    public AuthenticationFilter(AuthenticationManager authenticationManager, UserService userService, Environment env) {
+        super(authenticationManager);
+        this.userService = userService;
+        this.env = env;
+    }
+    
+    @Override
+    protected void successfulAuthentication(HttpServletRequest request, HttpServletResponse response, FilterChain chain, Authentication authResult) throws IOException, ServletException {
+        String userName = ((User)authResult.getPrincipal()).getUsername();
+        UserDto userDto = userService.getUserDetailsByEmail(userName);
+        String userId = userDto.getUserId();
+        // 만료 시간을 밀리초로 설정하여 Date 객체로 변환
+        long expirationTime = Long.valueOf(env.getProperty("token.expiration-time"));
+        Date expirationDate = new Date(System.currentTimeMillis() + expirationTime);
+        // secretKey
+        String secretKey    = env.getProperty("token.secret");
+        byte[] keyBytes     = Decoders.BASE64.decode(secretKey);
+        Key key             = Keys.hmacShaKeyFor(keyBytes);
+
+        // token key 생성
+        String token = Jwts.builder()
+                // 사용자 또는 애플리케이션을 식별하는 값
+                .subject(userId)
+                // 만료 시간
+                .expiration(expirationDate)
+                // 알고리즘 방식
+                .signWith(key)
+                .compact();
+
+        response.addHeader("token", token);
+        response.addHeader("userId", userId);
+    }
+}
+```
+
+### 5 - 3 - B )  Controller을 사용한 로그인 시
+
+#### ℹ️ 로그인
+- 필수 적으로 해당 요청은 filter 인증에서 제외할 수 있도록 설정 해줘야햔다.
+- 흐름
+  - 1 . username + password 를 기반으로 authenticationToken 생성
+  - 2 . authenticate() 메서드를 통해 요청된 Member 에 대한 검증 진행 - 실질적 검증 진행 ( 1에서 전달 받은 token 과 DB상 비밀번호 매칭 진행 )
+    - authenticate 메서드가 실행될 때 CustomUserDetailsService 에서 만든 loadUserByUsername 메서드 실행
+    - `UserDetailServer`의 `loadUserByUsername(String username)` 메서드를 사용하여 User 객체 생성
+  - 3 . authentication 정보를 통해 Jwt Token 생성
+```java
+@RequestMapping(value = "/member", produces = MediaType.APPLICATION_JSON_VALUE)
+@RequiredArgsConstructor
+@RestController
+public class MemberController {
+
+  private final AuthenticationManagerBuilder authenticationManagerBuilder;
+  private final JwtUtil jwtUtil;
+
+  @PostMapping("/login")
+  public ResponseEntity login(@RequestBody LoginDTO loginDTO){
+    // 1. username + password 를 기반으로 Authentication 객체 생성
+    // 이때 authentication 은 인증 여부를 확인하는 authenticated 값이 false
+    UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(loginDTO.getId()
+            , loginDTO.getPassword());
+
+    /** 실제 검증 후 반환하는  authentication에는 내가 커스텀한 UserDetail정보가 들어가 있음*/
+    // 2. 실제 검증. authenticate() 메서드를 통해 요청된 Member 에 대한 검증 진행
+    // authenticate 메서드가 실행될 때 CustomUserDetailsService 에서 만든 loadUserByUsername 메서드 실행
+    Authentication authentication = authenticationManagerBuilder.getObject().authenticate(authenticationToken);
+
+    JwtToken token = jwtUtil.generateToken(authentication);
+
+    return ResponseEntity.ok().body(token);
+  }
+
+}
+```
+
+#### ℹ️ Jwt Token 생성
+##### DTO
 ```java
 public class JwtToken {
   // Jwt 인증 타입 [ Bearer 사용 ]
@@ -670,22 +776,21 @@ public class JwtToken {
   // 리프레쉬 토큰
   private String refreshToken;
 }
+```
 
-/////////////////////////////////////////////////////////////////////////////
-
+##### 생성
+- `@Value("${jwt.expiration_time}")`를 통해 properties의 값을 읽어 사용
+- `@Component`를 통해 Bean 스캔 대상임을 지정
+- 토큰 생성 시 파라미터를 `(Authentication authentication)`를 지정하는 이유는 **userDetail 정보를 사용하기 위함**
+```java
 @Log4j2
 @Component
 public class JwtUtil {
     @Value("${jwt.expiration_time}")
     private Long accessTokenExpTime;
     @Value("${jwt.secret}")
-    private String secret;
+    private String secretKey;
 
-    /**
-     * createAccessToken 이슈로 인해 재생성 중
-     *
-     * - 👉 Authentication을 통해 로그인한 정보를 받아서 사용이 가능하다!!
-     * */
     public JwtToken generateToken(Authentication authentication){
 
         // 로그인에 성공한 사용자의 권한을 가져온 후 문자열로 반환
@@ -696,29 +801,33 @@ public class JwtUtil {
         // 로그인에 성공한 계정Id
         String userName = authentication.getName();
 
-        // 토큰 만료시간 생성
-        ZonedDateTime now = ZonedDateTime.now();
-        ZonedDateTime tokenValidity = now.plusSeconds(this.accessTokenExpTime);
+        // 만료 시간을 밀리초로 설정하여 Date 객체로 변환
+        Date expirationDate = new Date(System.currentTimeMillis() + accessTokenExpTime);
 
         Claims claims = Jwts.claims();
         claims.put("memberId", userName);
         claims.put("auth", authorities);
 
+        // secretKey       
+        byte[] keyBytes     = Decoders.BASE64.decode(secretKey);
+        Key key             = Keys.hmacShaKeyFor(keyBytes);
+        
         // Jwt AccessToken 생성
         String accessToken =  Jwts.builder()
                 .setClaims(claims)
                 .setIssuedAt(Date.from(Instant.now()))
-                .setExpiration(Date.from(tokenValidity.toInstant()))
-                .signWith(SignatureAlgorithm.HS256, secret)
+                // 만료 시간
+                .expiration(expirationDate)
+                // 알고리즘 방식
+                .signWith(key)
                 .compact();
 
         // Refresh Token 생성
         // 토큰 만료시간 생성
-        ZonedDateTime reNow = ZonedDateTime.now();
-        ZonedDateTime reTokenValidity = reNow.plusSeconds(this.accessTokenExpTime);
+        Date reTokenValidity = new Date(System.currentTimeMillis() + (accessTokenExpTime * 2 ));
         String refreshToken = Jwts.builder()
-                .setExpiration(Date.from(reTokenValidity.toInstant()))
-                .signWith(SignatureAlgorithm.HS256, secret)
+                .expiration(reTokenValidity)
+                .signWith(key)
                 .compact();
 
         return JwtToken.builder()
@@ -727,90 +836,55 @@ public class JwtUtil {
                 .refreshToken(refreshToken)
                 .build();
     }
-
-    /**
-     * JWT 검증
-     * - 각각 예외에 따라 ControllerAdvice를 사용해서 처리가 가능함
-     * @param accessToken
-     * @return IsValidate
-     */
-    public boolean validateToken(String accessToken) {
-        try {
-            Jwts.parserBuilder().setSigningKey(secret).build().parseClaimsJws(accessToken);
-            return true;
-        } catch (io.jsonwebtoken.security.SecurityException | MalformedJwtException e) {
-            log.info("Invalid JWT Token", e);
-        } catch (ExpiredJwtException e) {
-            log.info("Expired JWT Token", e);
-        } catch (UnsupportedJwtException e) {
-            log.info("Unsupported JWT Token", e);
-        } catch (IllegalArgumentException e) {
-            log.info("JWT claims string is empty.", e);
-        } // try - catch
-        return false;
-    }
-
-    /**
-     * JWT Claims 추출
-     * @param accessToken
-     * @return JWT Claims
-     */
-    public Claims parseClaims(String accessToken) {
-        try {
-            return Jwts.parserBuilder()
-                    .setSigningKey(secret)
-                    .build()
-                    .parseClaimsJws(accessToken)
-                    .getBody();
-        } catch (ExpiredJwtException e) {
-            return e.getClaims();
-        }// try - catch
-    }
-
 }
 ```
 
-- ### Jwt 인증 흐름
-- 로그인 요청이 들어온다.
+## 6 ) 로그인 - 인증 절차
+// TODO 진행 중...
 
-  - 해당 요청 Url Path는 인증을 거치지 않게 Security Config에서 설정 `web -> web.ignoring().requestMatchers(HttpMethod.POST,"/member/login")`
-  - 의존성 주입된 `AuthenticationManagerBuilder`의 `.getObject().authenticate(UsernamePasswordAuthenticationToke)` 로직 이동
 
-    ```java
-    @RequestMapping(value = "/member", produces = MediaType.APPLICATION_JSON_VALUE)
-    @RequiredArgsConstructor
-    @RestController
-    @Log4j2
-    public class MemberController {
 
-      private final AuthenticationManagerBuilder authenticationManagerBuilder;
-      private final JwtUtil jwtUtil;
+```java
+/**
+ * JWT 검증
+ * - 각각 예외에 따라 ControllerAdvice를 사용해서 처리가 가능함
+ * @param accessToken
+ * @return IsValidate
+ */
+public boolean validateToken(String accessToken) {
+    try {
+        Jwts.parserBuilder().setSigningKey(secret).build().parseClaimsJws(accessToken);
+        return true;
+    } catch (io.jsonwebtoken.security.SecurityException | MalformedJwtException e) {
+        log.info("Invalid JWT Token", e);
+    } catch (ExpiredJwtException e) {
+        log.info("Expired JWT Token", e);
+    } catch (UnsupportedJwtException e) {
+        log.info("Unsupported JWT Token", e);
+    } catch (IllegalArgumentException e) {
+        log.info("JWT claims string is empty.", e);
+    } // try - catch
+    return false;
+}
 
-      @PostMapping("/login")
-      public ResponseEntity login(@RequestBody LoginDTO loginDTO){
-        log.info("------------------");
-        log.info("Login Controller 접근");
-        log.info("------------------");
-        // 1. username + password 를 기반으로 Authentication 객체 생성
-        // 이때 authentication 은 인증 여부를 확인하는 authenticated 값이 false
-        UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(loginDTO.getId()
-                , loginDTO.getPassword());
+/**
+ * JWT Claims 추출
+ * @param accessToken
+ * @return JWT Claims
+ */
+public Claims parseClaims(String accessToken) {
+    try {
+        return Jwts.parserBuilder()
+                .setSigningKey(secret)
+                .build()
+                .parseClaimsJws(accessToken)
+                .getBody();
+    } catch (ExpiredJwtException e) {
+        return e.getClaims();
+    }// try - catch
+}
+```
 
-        /** 실제 검증 후 반환하는  authentication에는 내가 커스텀한 UserDetail정보가 들어가 있음*/
-        // 2. 실제 검증. authenticate() 메서드를 통해 요청된 Member 에 대한 검증 진행
-        // authenticate 메서드가 실행될 때 CustomUserDetailsService 에서 만든 loadUserByUsername 메서드 실행
-        Authentication authentication = authenticationManagerBuilder.getObject().authenticate(authenticationToken);
-
-        JwtToken token = jwtUtil.generateToken(authentication);
-
-        return ResponseEntity.ok().body(token);
-      }
-
-    }
-    ```
-
-- 작성했던 `UserDetailServer`의 `loadUserByUsername(String username)` 메서드를 사용하여 User 객체 생성
-- 인증이 완료되었다면 `jwtUtil`을 사용하여 토큰 생성
 
 ## Jwt 인증 절차
 
