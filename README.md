@@ -877,20 +877,24 @@ public class JwtUtil {
      * @param accessToken
      * @return IsValidate
      */
-    public boolean validateToken(String accessToken) {
+    public void validateToken(String accessToken) {
+        String secretKey = this.jwtSettingInfo.getSecret();
+        // Base64 디코딩 후 SecretKey 생성
+        byte[] keyBytes = Decoders.BASE64.decode(secretKey);
+        SecretKey key = Keys.hmacShaKeyFor(keyBytes);
         try {
-            Jwts.parserBuilder().setSigningKey(secret).build().parseClaimsJws(accessToken);
-            return true;
+            Jwts.parser().verifyWith(key).build().parseSignedClaims(accessToken);
         } catch (io.jsonwebtoken.security.SecurityException | MalformedJwtException e) {
-            log.info("Invalid JWT Token", e);
+            // 변조
+            log.error("Invalid JWT Token", e);
+            throw new UnsupportedTokenException();
         } catch (ExpiredJwtException e) {
-            log.info("Expired JWT Token", e);
-        } catch (UnsupportedJwtException e) {
-            log.info("Unsupported JWT Token", e);
-        } catch (IllegalArgumentException e) {
-            log.info("JWT claims string is empty.", e);
+            // 기간 만료
+            log.error("Expired JWT Token", e);
+            throw new ExpiredTokenException(e.getMessage());
+        } catch (Exception e){
+            throw new WrongTokenException(e.getMessage());
         } // try - catch
-        return false;
     }
 
     /**
@@ -898,13 +902,17 @@ public class JwtUtil {
      * @param accessToken
      * @return JWT Claims
      */
-    public Claims parseClaims(String accessToken) {
+    private Claims parseClaims(String accessToken) {
+        String secretKey = this.jwtSettingInfo.getSecret();
+        // Base64 디코딩 후 SecretKey 생성
+        byte[] keyBytes = Decoders.BASE64.decode(secretKey);
+        SecretKey key = Keys.hmacShaKeyFor(keyBytes);
         try {
-            return Jwts.parserBuilder()
-                    .setSigningKey(secret)
+            return Jwts.parser()
+                    .verifyWith(key)
                     .build()
-                    .parseClaimsJws(accessToken)
-                    .getBody();
+                    .parseSignedClaims(accessToken)
+                    .getPayload();
         } catch (ExpiredJwtException e) {
             return e.getClaims();
         }// try - catch
